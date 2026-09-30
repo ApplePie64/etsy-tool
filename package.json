@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "tsx watch --ignore ./src --ignore ./dist server/index.ts",
     "build": "tsc -p . && vite build",
-    "start": "NODE_ENV=production tsx server/index.ts",
+    "start": "tsx server/index.ts --production",
     "preview": "vite preview",
     "typecheck": "tsc -p .",
     "test": "vitest run",

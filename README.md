@@ -38,7 +38,7 @@ The advisor uses `claude-opus-5-5` with streaming, server-side refusal fallbacks
 
 ```bash
 npm run build
-npm start            # serves dist/ and the /api routes on $PORT (default 8787)
+npm start            # serves dist/ and the /api routes on $PORT (default 8787); works on Windows too
 ```
 
 `/api/advisor` has a small per-IP rate limit, but if you deploy publicly anyone with the URL can spend your API credits — put it behind authentication.

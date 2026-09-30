@@ -12,7 +12,8 @@ try {
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const isProd = process.env.NODE_ENV === "production";
+// A CLI flag rather than NODE_ENV=... so `npm start` also works in Windows shells.
+const isProd = process.env.NODE_ENV === "production" || process.argv.includes("--production");
 const port = Number(process.env.PORT) || 8787;
 
 const app = express();
