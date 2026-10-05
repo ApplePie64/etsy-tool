@@ -17,6 +17,20 @@ const wk = (weekStart: string, visits: number, orders: number, revenue: number, 
 });
 
 describe("metrics", () => {
+  it("keeps views and favourites unknown when they weren't entered", () => {
+    const m = computeMetrics({ id: "w", weekStart: "2026-09-07", visits: 200, orders: 4, revenue: 120 });
+    expect(m.viewsPerVisit).toBeNull();
+    expect(m.favoriteRate).toBeNull();
+    const agg = aggregate([
+      { id: "a", weekStart: "2026-09-07", visits: 100, views: 250, favorites: 5, orders: 1, revenue: 30 },
+      { id: "b", weekStart: "2026-09-14", visits: 100, orders: 1, revenue: 30 },
+    ])!;
+    expect(agg.views).toBeUndefined();
+    expect(agg.viewsPerVisit).toBeNull();
+    const f = diagnose([{ id: "b", weekStart: "2026-09-14", visits: 300, orders: 0, revenue: 0 }]);
+    expect(f.some((x) => x.id === "shallow-browsing")).toBe(false);
+  });
+
   it("computes rates and guards against zero division", () => {
     const m = computeMetrics(wk("2026-09-07", 200, 4, 120));
     expect(m.conversionRate).toBeCloseTo(0.02);
@@ -142,6 +156,23 @@ describe("orders", () => {
       { weekStart: "2026-09-28", orders: 1, sales: 20 },
     ]);
     expect(JSON.stringify(s)).not.toMatch(/Ann|Smith/);
+  });
+
+  it("never adds different currencies together and leaves out cancelled orders", () => {
+    const csv = [
+      "Sale Date,Order ID,Buyer User ID,Currency,Order Value,Discount Amount,Order Total,Adjusted Order Total,Status",
+      "09/21/26,1,b1,USD,30.00,0,30.00,,Completed",
+      "09/22/26,2,b2,USD,20.00,0,20.00,10.00,Completed",
+      "09/23/26,3,b3,EUR,25.00,0,25.00,,Completed",
+      "09/24/26,4,b4,USD,99.00,0,99.00,,Canceled",
+    ].join("\n");
+    const s = summarizeOrdersCsv(csv);
+    expect(s.currency).toBe("USD");
+    expect(s.orders).toBe(2);
+    expect(s.sales).toBe(50);
+    expect(s.otherCurrencies).toEqual([{ currency: "EUR", orders: 1, sales: 25 }]);
+    expect(s.excludedCancelled).toBe(1);
+    expect(s.adjusted).toBe(1);
   });
 });
 

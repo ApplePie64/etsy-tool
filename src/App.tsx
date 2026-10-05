@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { TABS } from "./lib/tabs";
 import { Academy } from "./pages/Academy";
 import { Advisor } from "./pages/Advisor";
+import { Compare } from "./pages/Compare";
 import { Overview } from "./pages/Overview";
 import { SellerTypes } from "./pages/SellerTypes";
 import { SeoLab } from "./pages/SeoLab";
@@ -68,6 +69,7 @@ function Shell() {
 
       <main className="main">
         {tab === "overview" && <Overview />}
+        {tab === "compare" && <Compare />}
         {tab === "seo" && <SeoLab />}
         {tab === "stats" && <ShopStats />}
         {tab === "sellers" && <SellerTypes />}

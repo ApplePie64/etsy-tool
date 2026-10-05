@@ -102,7 +102,7 @@ export function localAnswer(question: string, state: AdvisorState): string {
         `**Rules that matter most:**\n${bullets([
           "Main keyword at the start of the title; one readable description, no repeated words.",
           "All 13 tags, as 2–4 word phrases covering what it is, who it's for, occasion, style, material.",
-          "Repeat your key title phrase as a tag — title + tag match is the strongest signal.",
+          "Repeat your key title phrase as a tag so it appears in both places Etsy matches on.",
           "Fill every attribute and use the most specific category.",
           ...archetype.seo.slice(0, 1),
         ])}`,

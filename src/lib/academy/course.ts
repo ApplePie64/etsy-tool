@@ -41,7 +41,7 @@ export const COURSE: Lesson[] = [
         heading: "Step 1: query matching",
         paragraphs: [
           "When a shopper types \"gold initial necklace\", Etsy first collects every listing that could match. It looks at your title, your 13 tags, your category and your attributes. If none of those contain the shopper's words, your listing isn't even in the running — no matter how good it is.",
-          "This is why keywords matter so much. They're the ticket into the room. Etsy treats plurals and word order sensibly, so \"necklaces gold initial\" can still match, but a phrase that appears exactly in both your title and your tags is the strongest match you can make.",
+          "This is why keywords matter so much. They're the ticket into the room. Etsy treats plurals and word order sensibly, so \"necklaces gold initial\" can still match. Using your main phrase in both your title and your tags makes sure it can be matched wherever Etsy looks.",
         ],
       },
       {
@@ -172,7 +172,7 @@ export const COURSE: Lesson[] = [
         ],
         bullets: [
           "Cover different angles: what it is, who it's for, the occasion, the style, the material.",
-          "Repeat your most important title phrase as a tag — a phrase in both title and tags is the strongest match.",
+          "Repeat your most important title phrase as a tag, so it appears in both places Etsy matches on.",
           "Don't waste slots on plurals, reorderings, or your category name — Etsy already matches those.",
           "Avoid misspellings and other brands' trademarks.",
         ],

@@ -1,12 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AdvisorState } from "./lib/advisor/context";
+import type { Plan } from "./lib/compare/plan";
+import type { Feedback } from "./lib/compare/report";
+import type { Category, CompareListing } from "./lib/compare/types";
 import type { ListingInput } from "./lib/seo/analyzer";
 import { analyzeListing } from "./lib/seo/analyzer";
 import type { BulkAuditSummary } from "./lib/seo/bulk";
 import { DEFAULT_PROFILE, type SellerProfile } from "./lib/sellers/archetypes";
 import type { WeekStats } from "./lib/stats/metrics";
 import type { OrdersSummary } from "./lib/stats/orders";
-import type { TabId } from "./lib/tabs";
+import { TABS, type TabId } from "./lib/tabs";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -18,6 +21,21 @@ export type SavedAudit = Pick<BulkAuditSummary, "listings" | "averageScore" | "g
   rows: { title: string; score: number; grade: string; topIssue: string; tagCount: number; photoCount: number; price: number }[];
 };
 
+/** A saved listing comparison (autosaved as the seller edits it). */
+export interface SavedComparison {
+  id: string;
+  name: string;
+  category: Category;
+  createdAt: string;
+  updatedAt: string;
+  /** When the listings last changed; a plan older than this is stale. */
+  listingsUpdatedAt: string;
+  listings: CompareListing[];
+  plan: Plan | null;
+  chat: ChatTurn[];
+  feedback: Feedback;
+}
+
 export interface AppData {
   profile: SellerProfile;
   profileSet: boolean;
@@ -28,6 +46,8 @@ export interface AppData {
   planDone: Record<string, boolean>;
   academy: { completed: number[]; quiz: Record<number, number> };
   chat: ChatTurn[];
+  comparisons: SavedComparison[];
+  activeComparison: string | null;
 }
 
 export const EMPTY_DRAFT: ListingInput = {
@@ -53,6 +73,8 @@ const INITIAL: AppData = {
   planDone: {},
   academy: { completed: [], quiz: {} },
   chat: [],
+  comparisons: [],
+  activeComparison: null,
 };
 
 const STORAGE_KEY = "sellerscope:v1";
@@ -89,7 +111,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(load);
   const [tab, setTab] = useState<TabId>(() => {
     const h = location.hash.replace("#", "") as TabId;
-    return ["overview", "seo", "stats", "sellers", "academy", "advisor"].includes(h) ? h : "overview";
+    return TABS.some((t) => t.id === h) ? h : "overview";
   });
 
   const saveTimer = useRef<number | undefined>(undefined);

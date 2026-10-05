@@ -47,7 +47,7 @@ export const RANKING_FACTORS = [
     id: "relevancy",
     name: "Query matching & relevancy",
     summary:
-      "Etsy first gathers listings whose title, tags, categories and attributes match the shopper's words, then ranks them. Exact phrase matches in the title and tags are the strongest relevancy signal.",
+      "Etsy first gathers listings whose title, tags, categories and attributes match the shopper's words, then ranks them.",
   },
   {
     id: "listing-quality",

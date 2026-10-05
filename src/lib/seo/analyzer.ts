@@ -179,7 +179,7 @@ function titleChecks(input: ListingInput, keyword: string, inferred: boolean): S
     out.push(
       check("title-keyword", "title", "Target keyword in title", 8, 5,
         `All the words of "${keyword}" are in the title, but not together as a phrase.`,
-        `Use "${keyword}" exactly as shoppers type it — exact phrase matches are the strongest relevancy signal.`),
+        `Use "${keyword}" exactly as shoppers type it, so the whole phrase can be matched.`),
     );
   } else {
     out.push(
@@ -300,7 +300,7 @@ function tagChecks(input: ListingInput, tags: string[], keyword: string): SeoChe
         ? "No tags yet."
         : `${aligned.length} tag(s) also appear in the title${keyword ? `; target keyword ${keywordTagged ? "is" : "is not"} a tag` : ""}.`,
       keyword && !keywordTagged
-        ? `Add "${keyword}" as a tag. A phrase in both the title and the tags is the strongest match.`
+        ? `Add "${keyword}" as a tag too, so the phrase appears in both places Etsy matches on.`
         : "Repeat your 2–3 most important title phrases as tags."),
   );
 
@@ -371,7 +371,7 @@ function visualChecks(input: ListingInput): SeoCheck[] {
       "Use at least 10: hero shot on a clean background, scale/in-hand, lifestyle, detail close-ups, variations, packaging."),
     check("video", "visuals", "Listing video", 4, input.hasVideo ? 4 : 0,
       input.hasVideo ? "Has a video." : "No video.",
-      "Add a 5–15 second video. It autoplays in search and on the listing page and lifts clicks and conversion."),
+      "Add a 5–15 second video. It plays on the listing page and shows buyers the item in use."),
   ];
 }
 
@@ -408,14 +408,14 @@ export function analyzeListing(input: ListingInput): SeoReport {
   const grade: SeoReport["grade"] = score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
   const verdict =
     grade === "A"
-      ? "Search-ready. Focus on photos, price and reviews to lift conversion."
+      ? "Covers Etsy's published listing guidance well."
       : grade === "B"
-        ? "Solid. A few fixes will make it more findable."
+        ? "Covers most of the guidance; a few gaps left."
         : grade === "C"
-          ? "Findable for some searches, but missing easy wins."
+          ? "Several checklist items are missing."
           : grade === "D"
-            ? "Weak for search. Work through the priority fixes below."
-            : "Unlikely to be found in Etsy search yet.";
+            ? "Many checklist items are missing. Start with the priority fixes."
+            : "Most of the checklist is missing.";
 
   const priorities = checks
     .filter((c) => c.status !== "pass")

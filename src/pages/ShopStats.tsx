@@ -13,15 +13,29 @@ import { useStore } from "../store";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** Money in a known currency; "$" only when it really is USD. */
+const cur = (n: number, currency: string | null | undefined) => (!currency || currency === "USD" ? money(n) : `${n.toFixed(2)} ${currency}`);
+
 function lastWeekStart(): string {
   const d = new Date(weekStartOf(new Date()) + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() - 7);
   return isoDate(d);
 }
 
-type Draft = Omit<WeekStats, "id" | "sources"> & { sources: Partial<TrafficSources> };
+/** Form state: every number starts blank. Blank optional fields are saved as unknown, never as 0. */
+interface Draft {
+  weekStart: string;
+  visits?: number;
+  views?: number;
+  favorites?: number;
+  orders?: number;
+  revenue?: number;
+  adSpend?: number;
+  adRevenue?: number;
+  sources: Partial<TrafficSources>;
+}
 
-const emptyDraft = (): Draft => ({ weekStart: lastWeekStart(), visits: 0, views: 0, favorites: 0, orders: 0, revenue: 0, sources: {} });
+const emptyDraft = (): Draft => ({ weekStart: lastWeekStart(), sources: {} });
 
 export function ShopStats() {
   const { data, update } = useStore();
@@ -101,12 +115,13 @@ export function ShopStats() {
                   <Funnel
                     steps={[
                       { label: "Visits", value: s.last4.visits },
-                      { label: "Favourites", value: s.last4.favorites },
+                      ...(s.last4.favorites !== undefined ? [{ label: "Favourites", value: s.last4.favorites }] : []),
                       { label: "Orders", value: s.last4.orders },
                     ]}
                   />
                   <p className="small muted" style={{ marginTop: 12 }}>
-                    {s.last4.views > 0 ? `${s.last4.viewsPerVisit.toFixed(1)} listing views per visit · ` : ""}
+                    {s.last4.viewsPerVisit !== null ? `${s.last4.viewsPerVisit.toFixed(1)} listing views per visit · ` : "Listing views not entered for every week · "}
+                    {s.last4.favorites === undefined ? "Favourites not entered for every week · " : ""}
                     {s.last4.orders > 0 ? `${money(s.last4.revenuePerVisit)} revenue per visit` : "No orders yet"}
                   </p>
                 </>
@@ -178,12 +193,21 @@ function WeekForm() {
   const set = (patch: Partial<Draft>) => setD((x) => ({ ...x, ...patch }));
   const exists = data.weeks.some((w) => w.weekStart === d.weekStart);
 
+  const missingRequired = (["visits", "orders", "revenue"] as const).filter((k) => d[k] === undefined);
   const save = () => {
-    const sourcesTotal = SOURCE_KEYS.reduce((a, k) => a + (d.sources[k] ?? 0), 0);
+    if (missingRequired.length) return;
+    const sourcesEntered = SOURCE_KEYS.some((k) => d.sources[k] !== undefined);
     const week: WeekStats = {
-      ...d,
       id: `wk-${d.weekStart}`,
-      sources: sourcesTotal > 0 ? d.sources : undefined,
+      weekStart: d.weekStart,
+      visits: d.visits!,
+      orders: d.orders!,
+      revenue: d.revenue!,
+      views: d.views,
+      favorites: d.favorites,
+      adSpend: d.adSpend,
+      adRevenue: d.adRevenue,
+      sources: sourcesEntered ? d.sources : undefined,
     };
     update((s) => ({
       weeks: [...s.weeks.filter((w) => w.weekStart !== week.weekStart && !w.id.startsWith("sample-")), week].sort((a, b) =>
@@ -216,11 +240,11 @@ function WeekForm() {
           <span>Week starting</span>
           <input type="date" value={d.weekStart} onChange={(e) => set({ weekStart: e.target.value })} />
         </label>
-        <NumberField label="Visits" value={d.visits} onChange={(v) => set({ visits: v ?? 0 })} />
-        <NumberField label="Listing views" value={d.views} onChange={(v) => set({ views: v ?? 0 })} />
-        <NumberField label="Favourites" value={d.favorites} onChange={(v) => set({ favorites: v ?? 0 })} />
-        <NumberField label="Orders" value={d.orders} onChange={(v) => set({ orders: v ?? 0 })} />
-        <NumberField label="Revenue" hint="$" step={0.01} value={d.revenue} onChange={(v) => set({ revenue: v ?? 0 })} />
+        <NumberField label="Visits" hint="required" value={d.visits} onChange={(v) => set({ visits: v })} />
+        <NumberField label="Listing views" hint="optional" value={d.views} onChange={(v) => set({ views: v })} />
+        <NumberField label="Favourites" hint="optional" value={d.favorites} onChange={(v) => set({ favorites: v })} />
+        <NumberField label="Orders" hint="required" value={d.orders} onChange={(v) => set({ orders: v })} />
+        <NumberField label="Revenue" hint="required, $" step={0.01} value={d.revenue} onChange={(v) => set({ revenue: v })} />
         <NumberField label="Etsy Ads spend" hint="optional" step={0.01} value={d.adSpend} onChange={(v) => set({ adSpend: v })} />
         <NumberField label="Revenue from ads" hint="optional" step={0.01} value={d.adRevenue} onChange={(v) => set({ adRevenue: v })} />
       </div>
@@ -237,9 +261,10 @@ function WeekForm() {
         )}
       </div>
       <div className="row">
-        <button className="btn btn-primary" onClick={save} disabled={!d.weekStart}>
+        <button className="btn btn-primary" onClick={save} disabled={!d.weekStart || missingRequired.length > 0}>
           {exists ? "Update week" : "Save week"}
         </button>
+        {missingRequired.length > 0 && <span className="tiny muted">Enter {missingRequired.join(", ")} to save. Leave optional fields blank if you don't have them — they stay unknown.</span>}
         {data.weeks.some((w) => w.id.startsWith("sample-")) && <span className="tiny muted">Saving your own week replaces the sample data.</span>}
       </div>
     </div>
@@ -280,8 +305,8 @@ function WeeksTable() {
               <tr key={w.id}>
                 <td>{w.weekStart}</td>
                 <td className="num">{w.visits}</td>
-                <td className="num">{w.views}</td>
-                <td className="num">{w.favorites}</td>
+                <td className="num">{w.views ?? "—"}</td>
+                <td className="num">{w.favorites ?? "—"}</td>
                 <td className="num">{w.orders}</td>
                 <td className="num">{pct(w.conversionRate)}</td>
                 <td className="num">{money(w.revenue)}</td>
@@ -349,11 +374,11 @@ function OrdersImport() {
               </span>
             </div>
             <div className="tile">
-              <span className="tile-label">Item sales</span>
+              <span className="tile-label">Item sales{o.currency ? ` (${o.currency})` : ""}</span>
               <span className="tile-value" style={{ fontSize: "1.3rem" }}>
-                {money(o.sales)}
+                {cur(o.sales, o.currency)}
               </span>
-              <span className="tiny muted">AOV {money(o.aov)}</span>
+              <span className="tiny muted">AOV {cur(o.aov, o.currency)}</span>
             </div>
             <div className="tile">
               <span className="tile-label">Repeat buyers</span>
@@ -369,6 +394,18 @@ function OrdersImport() {
               </span>
             </div>
           </div>
+          {(o.otherCurrencies?.length > 0 || o.excludedCancelled > 0 || o.adjusted > 0) && (
+            <div className="callout small stack-sm" style={{ gap: 2 }}>
+              {o.otherCurrencies?.length > 0 && (
+                <span>
+                  Figures above are {o.currency} orders only. Kept separate, not converted:{" "}
+                  {o.otherCurrencies.map((x) => `${x.orders} order${x.orders === 1 ? "" : "s"} in ${x.currency} (${cur(x.sales, x.currency)})`).join(", ")}.
+                </span>
+              )}
+              {o.excludedCancelled > 0 && <span>{o.excludedCancelled} cancelled or refunded order(s) left out.</span>}
+              {o.adjusted > 0 && <span>{o.adjusted} order(s) have adjusted totals (e.g. partial refunds) that these figures don't reflect.</span>}
+            </div>
+          )}
           <h3 style={{ marginTop: 8 }}>Orders by weekday</h3>
           <BarList
             items={o.byWeekday.map((n, i) => ({ key: WEEKDAYS[i]!, label: WEEKDAYS[i]!, value: n, display: String(n) }))}

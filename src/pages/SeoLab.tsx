@@ -16,7 +16,10 @@ export function SeoLab() {
       <div className="page-head">
         <div>
           <h1>SEO Lab</h1>
-          <p>Score a listing against how Etsy search matches and ranks listings, then fix the highest-impact items first.</p>
+          <p>
+            Check a listing against Etsy's published listing guidance (title, tags, description, photos, shipping, attributes) and fix the biggest gaps first. The score is a checklist,
+            not Etsy's ranking score, and it doesn't predict ranking or sales.
+          </p>
         </div>
         <div className="segmented" role="group" aria-label="Mode">
           <button aria-pressed={mode === "single"} onClick={() => setMode("single")}>
@@ -195,6 +198,7 @@ function SingleListing() {
               <div className="row" style={{ gap: 20, alignItems: "center", flexWrap: "nowrap" }}>
                 <ScoreRing score={report.score} grade={report.grade} />
                 <div className="stack-sm" style={{ flex: 1, minWidth: 0 }}>
+                  <span className="tile-label">Listing checklist score</span>
                   <h2>{report.verdict}</h2>
                   {report.areas.map((a) => (
                     <Meter key={a.area} label={AREA_LABELS[a.area]} score={(a.points / a.maxPoints) * 100} />
@@ -408,7 +412,7 @@ function BulkAudit({ onOpen }: { onOpen: () => void }) {
               <span className="tile-value">{audit.averageScore}</span>
             </div>
             <div className="card tile">
-              <span className="tile-label">Search-ready (A/B)</span>
+              <span className="tile-label">Checklist grade A or B</span>
               <span className="tile-value">{audit.gradeCounts.A + audit.gradeCounts.B}</span>
             </div>
             <div className="card tile">
