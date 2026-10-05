@@ -26,8 +26,10 @@ export interface WeekStats {
   /** ISO date (YYYY-MM-DD) of the first day of the week. */
   weekStart: string;
   visits: number;
-  views: number;
-  favorites: number;
+  /** Listing views; undefined when the seller didn't enter it (unknown, not zero). */
+  views?: number;
+  /** Favourites; undefined when not entered. */
+  favorites?: number;
   orders: number;
   revenue: number;
   adSpend?: number;
@@ -39,8 +41,8 @@ export interface WeekMetrics extends WeekStats {
   conversionRate: number;
   aov: number;
   revenuePerVisit: number;
-  viewsPerVisit: number;
-  favoriteRate: number;
+  viewsPerVisit: number | null;
+  favoriteRate: number | null;
   roas: number | null;
 }
 
@@ -52,8 +54,8 @@ export function computeMetrics(w: WeekStats): WeekMetrics {
     conversionRate: safeDiv(w.orders, w.visits),
     aov: safeDiv(w.revenue, w.orders),
     revenuePerVisit: safeDiv(w.revenue, w.visits),
-    viewsPerVisit: safeDiv(w.views, w.visits),
-    favoriteRate: safeDiv(w.favorites, w.visits),
+    viewsPerVisit: w.views === undefined ? null : safeDiv(w.views, w.visits),
+    favoriteRate: w.favorites === undefined ? null : safeDiv(w.favorites, w.visits),
     roas: w.adSpend && w.adSpend > 0 && w.adRevenue !== undefined ? w.adRevenue / w.adSpend : null,
   };
 }
@@ -94,13 +96,15 @@ export function aggregate(weeks: WeekStats[]): WeekMetrics | null {
       adRevenue += w.adRevenue;
     }
   }
-  const sum = (k: "visits" | "views" | "favorites" | "orders" | "revenue") => weeks.reduce((s, w) => s + (w[k] || 0), 0);
+  const sum = (k: "visits" | "orders" | "revenue") => weeks.reduce((s, w) => s + (w[k] || 0), 0);
+  // An optional metric is only totalled when every week has it; a partial sum would understate it.
+  const sumKnown = (k: "views" | "favorites") => (weeks.every((w) => w[k] !== undefined) ? weeks.reduce((s, w) => s + w[k]!, 0) : undefined);
   return computeMetrics({
     id: `agg-${weeks[0]!.weekStart}`,
     weekStart: weeks[0]!.weekStart,
     visits: sum("visits"),
-    views: sum("views"),
-    favorites: sum("favorites"),
+    views: sumKnown("views"),
+    favorites: sumKnown("favorites"),
     orders: sum("orders"),
     revenue: sum("revenue"),
     adSpend: hasAds ? adSpend : undefined,
@@ -312,7 +316,7 @@ export function diagnose(weeksIn: WeekStats[], opts: DiagnoseOptions = {}): Find
           "Make photo 1 bright, clear, and on a simple background. Add scale and lifestyle shots.",
           "Compare your price and shipping with the top 5 results for your main keyword.",
           "Answer the common questions (size, materials, timing) in the first lines of the description.",
-          fav >= 0.08
+          fav !== null && fav >= 0.08
             ? "Shoppers favourite but don't buy: turn on targeted offers to favouriters and abandoned carts (Marketing → Sales and discounts)."
             : "Check that shop policies, About section and reviews build trust.",
         ],
@@ -342,7 +346,7 @@ export function diagnose(weeksIn: WeekStats[], opts: DiagnoseOptions = {}): Find
   }
 
   // Browsing depth
-  if (last4.visits >= 50 && last4.views > 0 && last4.viewsPerVisit < 1.5) {
+  if (last4.visits >= 50 && last4.viewsPerVisit !== null && last4.viewsPerVisit > 0 && last4.viewsPerVisit < 1.5) {
     out.push({
       id: "shallow-browsing",
       severity: "info",

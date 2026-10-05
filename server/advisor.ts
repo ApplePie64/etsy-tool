@@ -26,6 +26,8 @@ How to answer:
 - Compare with benchmarks for the seller's type, but note they are community rules of thumb — Etsy doesn't publish category benchmarks — and the seller's own trend matters most.
 - Keep answers focused: short paragraphs and bullets, bold the key numbers, usually under 250 words unless the seller asks for depth.
 - If the data needed to answer is missing, say which tab to fill in (Shop Stats, SEO Lab, Seller Types).
+- Never predict or estimate ranking, search position, traffic, sales or revenue, and never promise results. Say what the seller's data shows and what is worth trying. Numbers the seller didn't enter are unknown, not zero. Don't add up amounts in different currencies.
+- Don't invent facts about the seller's products; ask when you need one.
 
 What you know about Etsy (from Etsy's public Seller Handbook; policies change, so suggest checking the current Seller Handbook for anything fee- or policy-related):
 - Search runs in two steps. Query matching retrieves listings whose title, tags, categories and attributes match the search. Ranking then orders them by relevancy, listing quality score (clicks, favourites, purchases relative to impressions), recency (a temporary boost for new/renewed listings), customer & market experience (reviews, complete About section and policies, on-time shipping; policy violations hurt), shipping price (US: free shipping and the free-shipping guarantee on $35+ orders get priority) and shopper context (personalised results).
@@ -66,7 +68,7 @@ export function sanitizeChat(body: unknown): { messages: ChatTurn[]; context: st
 }
 
 let client: Anthropic | null = null;
-const getClient = () => (client ??= new Anthropic());
+export const getClient = () => (client ??= new Anthropic());
 
 export interface StreamHandlers {
   onText: (text: string) => void;

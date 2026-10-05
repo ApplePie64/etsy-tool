@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Markdown } from "../components/ui";
 import { buildAdvisorContext } from "../lib/advisor/context";
 import { localAnswer } from "../lib/advisor/localAdvisor";
+import { aiAvailable, ApiError, streamText } from "../lib/sse";
 import { useStore, type ChatTurn } from "../store";
 
 const SUGGESTIONS = [
@@ -15,46 +16,6 @@ const SUGGESTIONS = [
 ];
 
 type Mode = "checking" | "ai" | "offline";
-
-/** Reads the server's SSE stream, calling onText for each text chunk. */
-async function streamAdvisor(
-  messages: ChatTurn[],
-  context: string,
-  onText: (t: string) => void,
-  signal: AbortSignal,
-): Promise<{ notice?: string }> {
-  const res = await fetch("/api/advisor", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, context }),
-    signal,
-  });
-  if (!res.ok || !res.body) {
-    const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
-    throw Object.assign(new Error(body?.message ?? `Advisor error ${res.status}`), { code: body?.error, status: res.status });
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  let notice: string | undefined;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buf.indexOf("\n\n")) >= 0) {
-      const chunk = buf.slice(0, idx);
-      buf = buf.slice(idx + 2);
-      const line = chunk.split("\n").find((l) => l.startsWith("data: "));
-      if (!line) continue;
-      const evt = JSON.parse(line.slice(6)) as { type: string; text?: string; message?: string };
-      if (evt.type === "text" && evt.text) onText(evt.text);
-      else if (evt.type === "notice") notice = evt.message;
-      else if (evt.type === "error") throw new Error(evt.message ?? "Advisor error");
-    }
-  }
-  return { notice };
-}
 
 export function Advisor() {
   const { data, update, advisorState, go } = useStore();
@@ -71,14 +32,11 @@ export function Advisor() {
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/health")
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((h: { ai: boolean; model: string | null }) => {
-        if (!alive) return;
-        setMode(h.ai ? "ai" : "offline");
-        setModel(h.model);
-      })
-      .catch(() => alive && setMode("offline"));
+    void aiAvailable().then((h) => {
+      if (!alive) return;
+      setMode(h.ai ? "ai" : "offline");
+      setModel(h.model);
+    });
     return () => {
       alive = false;
       abortRef.current?.abort();
@@ -108,18 +66,22 @@ export function Advisor() {
     abortRef.current = ctrl;
     let text = "";
     try {
-      const { notice } = await streamAdvisor(history, context, (t) => {
-        text += t;
-        setPending(text);
-      }, ctrl.signal);
+      const { notice } = await streamText(
+        "/api/advisor",
+        { messages: history, context },
+        (t) => {
+          text += t;
+          setPending(text);
+        },
+        ctrl.signal,
+      );
       const content = notice ? `${text}${text ? "\n\n" : ""}_${notice}_` : text;
       update({ chat: [...history, { role: "assistant", content: content || "_No answer received._" }] });
     } catch (e) {
       if (ctrl.signal.aborted) {
         if (text) update({ chat: [...history, { role: "assistant", content: `${text}\n\n_(stopped)_` }] });
       } else {
-        const code = (e as { code?: string }).code;
-        if (code === "not_configured") setMode("offline");
+        if (e instanceof ApiError && e.code === "not_configured") setMode("offline");
         // Fall back to the offline advisor so the seller still gets an answer.
         const fallback = localAnswer(question, advisorState);
         update({

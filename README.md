@@ -1,12 +1,15 @@
 # SellerScope — SEO, stats & study for Etsy sellers
 
-SellerScope helps Etsy sellers work out **why their shop is or isn't selling** and what to do about it this week. It combines an Etsy SEO analyser, a shop-stats and traffic dashboard, profiles of the different kinds of Etsy sellers, a 7-day course, and an advisor you can talk to about your shop.
+SellerScope helps Etsy sellers work out **why their shop is or isn't selling** and what to do about it this week. Its core workflow compares your listing with 3–5 listings you choose and turns the differences into an evidence-backed improvement plan. Around it sit a listing checklist, a shop-stats dashboard, profiles of the different kinds of Etsy sellers, a 7-day course, and an advisor you can talk to about your shop.
+
+What's built against the project research doc, and what isn't, is in [docs/status.md](docs/status.md).
 
 | Tab | What it does |
 |---|---|
+| **Compare Listings** | Your listing next to 3–5 listings you chose (digital downloads). A side-by-side table of price, photos, video, tags and customer-facing details (file formats, sizes, what's included, software, editing, licence, delivery, intended buyer), title/tag phrase coverage, and price position within the same currency. An **improvement plan** — from Claude, or the rules engine when AI is off — where every suggestion quotes the listing text it's based on, links Etsy's guidance, and only proposes wording built from your own product facts. Ask follow-up questions, save analyses, download an HTML/Markdown report, and record whether it was useful. |
 | **Overview** | Shop health score, last week's numbers with week-over-week changes, the most important findings, and a **personalised 7-day action plan** built from your data and seller type. |
-| **SEO Lab** | Scores a listing out of 100 against how Etsy search matches and ranks listings (title, 13 tags, description, photos/video, shipping, attributes), lists the fixes worth the most points, suggests tags, and previews the listing in Etsy mobile search and Google. **Whole-shop mode** audits every listing from Etsy's listings CSV and finds shop-wide issues. |
-| **Shop Stats** | Log weekly visits, views, favourites, orders, revenue, ad spend and traffic sources. Charts for visits, revenue and conversion; funnel; traffic-source mix; diagnostics (traffic drops by source, conversion vs your seller type, ads ROAS vs break-even, order value). Imports Etsy's **Orders CSV** (repeat buyers, coupon use, best weekdays) and includes a **fee & profit calculator**. |
+| **SEO Lab** | A 100-point checklist of Etsy's published listing guidance (title, 13 tags, description, photos/video, shipping, attributes) — not Etsy's ranking score and not a prediction. Lists the fixes worth the most points, suggests tags, and previews the listing in Etsy mobile search and Google. **Whole-shop mode** audits every listing from Etsy's listings CSV and finds shop-wide issues. |
+| **Shop Stats** | Log weekly visits, orders and revenue (required) plus optional views, favourites, ad spend and traffic sources — blanks stay unknown, never zero. Charts for visits, revenue and conversion; funnel; traffic-source mix; diagnostics (traffic drops by source, conversion vs your seller type, ads ROAS vs break-even, order value). Imports Etsy's **Orders CSV** (repeat buyers, coupon use, best weekdays; other currencies kept separate, cancelled/refunded orders left out) and includes a **fee & profit calculator**. |
 | **Seller Types** | Seven kinds of Etsy seller (handmade, personalised gifts, print-on-demand, digital downloads, vintage, craft supplies, artists) × four growth stages. Shows your benchmarks, a side-by-side comparison of all types, and each type's SEO/traffic/pricing playbook. |
 | **7-Day Academy** | One lesson a day for a week: how Etsy search works, keywords & titles, tags & attributes, photos & conversion, pricing & fees, traffic sources & ads, reading your stats. Each lesson has a quiz and an "apply it" task. |
 | **Advisor** | Chat about your sellers, traffic, listings and pricing. Uses **Claude** when `ANTHROPIC_API_KEY` is set; otherwise answers from the app's built-in rule engine. |
@@ -24,7 +27,7 @@ npm run dev          # http://localhost:8787
 
 Click **Explore with a demo shop** on the Overview to try everything with sample data.
 
-### Turn on the AI advisor (optional)
+### Turn on the AI features (optional)
 
 ```bash
 cp .env.example .env
@@ -32,7 +35,7 @@ cp .env.example .env
 npm run dev
 ```
 
-The advisor uses `claude-opus-5-5` with streaming, server-side refusal fallbacks and a cached system prompt. Override with `ADVISOR_MODEL` / `ADVISOR_EFFORT` (`low`…`max`, default `medium`). The key stays on the server; the browser never sees it.
+The advisor and the comparison plan/chat use `claude-opus-5-5` with server-side refusal fallbacks and a cached system prompt; the plan uses structured outputs and is then checked by the same rules as the offline plan. Override with `ADVISOR_MODEL` / `ADVISOR_EFFORT` (`low`…`max`, default `medium`). The key stays on the server; the browser never sees it.
 
 ### Production
 
@@ -52,9 +55,34 @@ npm start            # serves dist/ and the /api routes on $PORT (default 8787);
 | All listings | Settings → Options → **Download Data → Currently for sale listings** | SEO Lab → Whole shop |
 | Orders | Settings → Options → **Download Data → Orders** | Shop Stats → Orders export |
 
-## How the SEO score works
+## How the comparison stays honest
 
-100 points across six areas, based on Etsy's public Seller Handbook guidance ("How Etsy Search Works") and common seller practice:
+The rules engine computes everything objective (prices, counts, which facts each listing states, phrase coverage); the AI only explains and proposes edits. Every plan — AI or rules — passes a deterministic guard before you see it:
+
+- **Evidence must be real.** Each suggestion cites `listing.field` plus a quote; quotes that aren't in that field are dropped, and a suggestion with no verifiable evidence is removed.
+- **No invented product facts.** Suggested wording may only mention formats, sizes, counts, software, licence terms and numbers that appear in *your* listing. Otherwise the wording is removed and you're asked to confirm the fact.
+- **No predictions.** Claims about ranking, traffic, sales or revenue (and specific price prescriptions) are removed.
+- **Listing text is data.** Instructions hidden in listing text are flagged and ignored; suggestions that repeat them are removed.
+- **Unknown stays unknown, currencies stay separate.** Blank fields are "Unknown"; prices are only compared within one currency.
+
+What was removed, and why, is shown under each plan and in the report.
+
+### Evaluation
+
+```bash
+npm run eval            # rules engine on four fixtures (representative, incomplete, mixed currency, injection)
+npm run eval -- --ai    # also scores Claude's plans (needs ANTHROPIC_API_KEY; uses API credits)
+```
+
+Writes a Markdown report to `eval-results/` with pass/fail per acceptance check and how many AI suggestions the guard removed or fixed.
+
+### Data sources
+
+Listings are entered by hand or imported from your own listings CSV. Etsy's API can supply listings, but only with approved API access (Etsy's developer terms disallow scraping), so it isn't wired in. Sample data is fictional and labelled.
+
+## How the SEO checklist works
+
+100 points across six areas, based on Etsy's public Seller Handbook guidance ("How Etsy Search Works") and common seller practice. It measures how completely a listing follows that guidance; it is not Etsy's ranking score and doesn't predict ranking or sales:
 
 | Area | Points | Checks |
 |---|---|---|
@@ -80,9 +108,13 @@ npm run typecheck
 
 ```
 server/
-  index.ts           Express: /api/health, /api/advisor (SSE), Vite middleware in dev, dist/ in prod
-  advisor.ts         Claude call, system prompt, payload validation
+  index.ts           Express: /api/health, /api/advisor, /api/compare/plan, /api/compare/chat; Vite in dev, dist/ in prod
+  advisor.ts         shop advisor: Claude call, system prompt, payload validation
+  compare.ts         comparison plan (structured output) and follow-up chat
+scripts/
+  eval-compare.ts    acceptance-check evaluation (npm run eval)
 src/
+  lib/compare/       listing comparison: attributes, analysis, plan, guard, report, fixtures
   lib/seo/           rules, keyword helpers, listing analyser, bulk CSV audit
   lib/stats/         metrics & diagnostics, fees, orders CSV, sample data
   lib/sellers/       seller archetypes, stages, classifier

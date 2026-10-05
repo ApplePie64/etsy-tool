@@ -6,11 +6,20 @@ import { parseCsvRecords, parseMoney } from "../csv";
  * function — only counts and totals are kept.
  */
 export interface OrdersSummary {
+  /** Orders in the main currency (the one most orders use). */
   orders: number;
   items: number;
-  /** Item sales after discounts, before shipping and tax. */
+  /** Currency of `sales` and `aov`; null if the export has no currency column. */
+  currency: string | null;
+  /** Item sales after discounts, before shipping and tax, in `currency`. */
   sales: number;
   aov: number;
+  /** Orders in other currencies, totalled separately — never added to `sales`. */
+  otherCurrencies: { currency: string; orders: number; sales: number }[];
+  /** Orders left out because their status says cancelled or refunded. */
+  excludedCancelled: number;
+  /** Orders whose adjusted total differs from the original (e.g. partial refunds); not reflected in sales. */
+  adjusted: number;
   uniqueBuyers: number;
   repeatBuyerRate: number;
   couponRate: number;
@@ -54,6 +63,17 @@ export function summarizeOrdersCsv(csv: string): OrdersSummary {
     throw new Error("No orders found. Use Etsy's Orders CSV — it needs \"Sale Date\" and \"Order ID\" columns.");
   }
 
+  // Totals are per currency; the most common currency becomes the headline.
+  const currencyCounts = new Map<string, number>();
+  for (const r of recs) {
+    const c = (r.CURRENCY ?? "").trim().toUpperCase();
+    if (c) currencyCounts.set(c, (currencyCounts.get(c) ?? 0) + 1);
+  }
+  const mainCurrency = [...currencyCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const others = new Map<string, { orders: number; sales: number }>();
+  let excludedCancelled = 0;
+  let adjusted = 0;
+
   const seen = new Set<string>();
   const buyers = new Map<string, number>();
   const weeks = new Map<string, { orders: number; sales: number }>();
@@ -72,9 +92,24 @@ export function summarizeOrdersCsv(csv: string): OrdersSummary {
     seen.add(id);
     const date = parseEtsyDate(r["SALE DATE"] ?? "");
     if (!date) continue;
+    if (/cancel|refund/i.test(r.STATUS ?? "")) {
+      excludedCancelled++;
+      continue;
+    }
     const value = parseMoney(r["ORDER VALUE"]);
     const discount = parseMoney(r["DISCOUNT AMOUNT"]);
     const net = (Number.isNaN(value) ? 0 : value) - (Number.isNaN(discount) ? 0 : discount);
+    const adjustedTotal = parseMoney(r["ADJUSTED ORDER TOTAL"]);
+    const orderTotal = parseMoney(r["ORDER TOTAL"]);
+    if (!Number.isNaN(adjustedTotal) && !Number.isNaN(orderTotal) && Math.abs(adjustedTotal - orderTotal) > 0.005) adjusted++;
+    const currency = (r.CURRENCY ?? "").trim().toUpperCase() || null;
+    if (mainCurrency && currency && currency !== mainCurrency) {
+      const o = others.get(currency) ?? { orders: 0, sales: 0 };
+      o.orders++;
+      o.sales += net;
+      others.set(currency, o);
+      continue;
+    }
 
     orders++;
     items += Number(r["NUMBER OF ITEMS"]) || 1;
@@ -99,6 +134,10 @@ export function summarizeOrdersCsv(csv: string): OrdersSummary {
   return {
     orders,
     items,
+    currency: mainCurrency,
+    otherCurrencies: [...others.entries()].map(([currency, o]) => ({ currency, orders: o.orders, sales: Math.round(o.sales * 100) / 100 })),
+    excludedCancelled,
+    adjusted,
     sales: Math.round(sales * 100) / 100,
     aov: orders ? sales / orders : 0,
     uniqueBuyers,

@@ -90,7 +90,7 @@ export const ARCHETYPES: Record<ModelId, Archetype> = {
     seo: [
       "Pair \"personalized\" / \"custom\" with the product and the recipient: \"personalized cutting board for couple\".",
       "Create occasion-specific listings (wedding, anniversary, new home) rather than one catch-all listing.",
-      "Show the personalisation clearly in photo 1 — a real name example lifts clicks.",
+      "Show the personalisation clearly in photo 1 — a real name example shows buyers exactly what they'll get.",
     ],
     traffic: [
       "Plan Q4 early: update listings and photos in September–October so they gain history before the rush.",
@@ -154,7 +154,7 @@ export const ARCHETYPES: Record<ModelId, Archetype> = {
       "Make photo 1 a clear mockup and photo 2 a \"what you get\" graphic listing files and sizes.",
     ],
     traffic: [
-      "Pinterest is the strongest external channel for printables and templates.",
+      "Pinterest is a common external channel for printables and templates.",
       "Bundles and \"mega packs\" lift order value — list them alongside singles.",
       "Seasonal listings should go live 6–8 weeks before the season.",
     ],

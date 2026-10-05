@@ -39,7 +39,7 @@ export function buildAdvisorContext(state: AdvisorState): string {
     lines.push(`- Weeks of data: ${s.weeks.length} (${s.weeks[0]!.weekStart} to ${s.latest.weekStart})`);
     for (const w of s.weeks.slice(-8)) {
       lines.push(
-        `- Week of ${w.weekStart}: ${w.visits} visits, ${w.views} views, ${w.favorites} favs, ${w.orders} orders, ${money(w.revenue)} revenue, CR ${pct(w.conversionRate)}` +
+        `- Week of ${w.weekStart}: ${w.visits} visits, ${w.views ?? "unknown"} views, ${w.favorites ?? "unknown"} favs, ${w.orders} orders, ${money(w.revenue)} revenue, CR ${pct(w.conversionRate)}` +
           (w.adSpend ? `, ad spend ${money(w.adSpend)}${w.adRevenue !== undefined ? `, ad revenue ${money(w.adRevenue)}` : ""}` : ""),
       );
     }

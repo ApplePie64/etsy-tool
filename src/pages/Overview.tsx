@@ -50,7 +50,12 @@ export function Overview() {
 
       {isNew && (
         <div className="card stack">
-          <h2>Get set up in three steps</h2>
+          <h2>Get started</h2>
+          <button className="type-card" onClick={() => go("compare")} style={{ borderColor: "var(--accent)" }}>
+            <strong>Compare your listing with 3–5 others</strong>
+            <span>See what they tell buyers that you don't, how prices and phrases differ, and get an evidence-backed improvement plan.</span>
+          </button>
+          <p className="small muted">Or set up your shop dashboard:</p>
           <div className="grid grid-3">
             <button className="type-card" onClick={() => go("sellers")}>
               <strong>1. Your seller type</strong>
@@ -187,7 +192,18 @@ export function Overview() {
         </div>
       </div>
 
-      <div className="grid grid-2">
+      <div className="grid grid-3">
+        <div className="card stack-sm">
+          <h2>Listing comparisons</h2>
+          <p className="sub">
+            {data.comparisons.length
+              ? `${data.comparisons.length} saved. Latest: ${data.comparisons[0]!.name}${data.comparisons[0]!.plan ? ` — ${data.comparisons[0]!.plan.suggestions.length} suggestions` : ""}.`
+              : "Compare your listing with listings you want to learn from."}
+          </p>
+          <button className="btn btn-sm" style={{ alignSelf: "flex-start", marginTop: 6 }} onClick={() => go("compare")}>
+            Open Compare Listings
+          </button>
+        </div>
         <div className="card stack-sm">
           <h2>7-Day Academy</h2>
           <p className="sub">
