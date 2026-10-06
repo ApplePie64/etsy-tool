@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ClipboardEvent } from "react";
+import { parseListingPaste } from "../../lib/compare/pasteParser";
 import type { CompareListing } from "../../lib/compare/types";
 import { ETSY_LIMITS } from "../../lib/seo/rules";
 
@@ -30,6 +31,7 @@ export function ListingEditor({
 
   return (
     <div className="stack-sm">
+      <QuickFill listing={listing} onChange={onChange} />
       <div className="grid grid-2" style={{ gap: 10 }}>
         <label className="field">
           <span>Name</span>
@@ -134,6 +136,91 @@ export function ListingEditor({
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+const FIELD_NAMES: Record<string, string> = { title: "title", price: "price", description: "description", reviews: "review count", link: "link" };
+
+/**
+ * Paste box: the seller copies an Etsy listing page (Ctrl+A, Ctrl+C) and
+ * pastes it here; the found fields fill in immediately, with an undo.
+ */
+function QuickFill({ listing, onChange }: { listing: CompareListing; onChange: (patch: Partial<CompareListing>) => void }) {
+  const [summary, setSummary] = useState<{ text: string; missing: string[]; undo: Partial<CompareListing> } | null>(null);
+  const [value, setValue] = useState("");
+
+  const apply = (text: string) => {
+    const p = parseListingPaste(text);
+    if (!p.found.length) {
+      setSummary({ text: "Couldn't find listing details in that text. Try copying the whole listing page, or type the details below.", missing: [], undo: {} });
+      return;
+    }
+    const patch: Partial<CompareListing> = { source: "manual", capturedAt: new Date().toISOString().slice(0, 10) };
+    if (p.title) patch.title = p.title;
+    if (p.price !== null) {
+      patch.price = p.price;
+      patch.currency = p.currency;
+    }
+    if (p.description) patch.description = p.description;
+    if (p.reviewCount !== null && listing.role === "competitor") patch.reviewCount = p.reviewCount;
+    if (p.url) patch.url = p.url;
+    if (p.shopName && listing.role === "competitor" && /^Listing \d$/.test(listing.label)) patch.label = p.shopName;
+    const undo = Object.fromEntries(Object.keys(patch).map((k) => [k, listing[k as keyof CompareListing]])) as Partial<CompareListing>;
+    onChange(patch);
+    const missing = [
+      listing.photoCount === null ? "photo count" : null,
+      listing.hasVideo === null ? "video" : null,
+      listing.role === "mine" && listing.tags === null ? "tags" : null,
+    ].filter((x): x is string => !!x);
+    const found = p.found.map((f) => FIELD_NAMES[f] ?? f);
+    setSummary({
+      text: `Filled in: ${found.join(", ")}${p.currencyAssumed ? " (price read as USD from \"$\" — change the currency if that's wrong)" : ""}. Check them below.`,
+      missing,
+      undo,
+    });
+    setValue("");
+  };
+
+  return (
+    <div className="quickfill">
+      <label className="field">
+        <span>
+          Quick fill <span className="field-hint">on the Etsy listing page press Ctrl+A then Ctrl+C (⌘A, ⌘C on Mac), then paste here</span>
+        </span>
+        <textarea
+          rows={2}
+          value={value}
+          placeholder="Paste the listing page here…"
+          onChange={(e) => setValue(e.target.value)}
+          onPaste={(e: ClipboardEvent<HTMLTextAreaElement>) => {
+            const text = e.clipboardData.getData("text");
+            if (text.trim()) {
+              e.preventDefault();
+              apply(text);
+            }
+          }}
+          onBlur={() => value.trim() && apply(value)}
+        />
+      </label>
+      {summary && (
+        <div className="small quickfill-result" role="status">
+          <span>{summary.text}</span>
+          {summary.missing.length > 0 && <span className="muted"> Add by hand: {summary.missing.join(", ")} (not in copied text).</span>}
+          {Object.keys(summary.undo).length > 0 && (
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={() => {
+                onChange(summary.undo);
+                setSummary(null);
+              }}
+            >
+              Undo
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

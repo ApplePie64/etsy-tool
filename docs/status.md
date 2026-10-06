@@ -1,6 +1,6 @@
 # Project status against the research doc
 
-Status of SellerScope against *Etsy AI tool: research and one-week project scope* (30 September 2026). Updated 5 October 2026.
+Status of SellerScope against *Etsy AI tool: research and one-week project scope* (30 September 2026). Updated 6 October 2026.
 
 **Legend:** ✅ built and tested · 🟡 built with limits · ⛔ not built (blocked or deliberately deferred) · 👤 needs a person, not code
 
@@ -12,7 +12,7 @@ The core workflow is built: **provide a listing and comparison examples → insp
 |---|---|---|
 | One seller category, English listings | ✅ | Digital downloads. Fact extraction is English-only. |
 | Comparison set of 3–5 items | ✅ | Up to 5 comparison listings; warns below 3. |
-| Permitted API input when ready; otherwise seller-supplied details and labelled sample data | 🟡 | Manual entry and your own listings CSV work. Sample data is fictional and labelled everywhere it appears, including the report. Etsy API import isn't built: it needs approved API access, and Etsy's terms rule out scraping. |
+| Permitted API input when ready; otherwise seller-supplied details and labelled sample data | 🟡 | Paste-to-fill (copy an Etsy listing page, paste it), manual entry and your own listings CSV work. Sample data is fictional and labelled everywhere it appears, including the report. Etsy API import isn't built: it needs approved API access, and Etsy's terms rule out scraping. |
 | Price/currency, product attributes, title/tag coverage, customer-facing differences | ✅ | Side-by-side table, phrase coverage table, and price position within one currency. |
 | AI explanations tied to input fields and official guidance | 🟡 | Every suggestion cites `listing.field` plus a quote and links the Etsy guidance it relies on. Tested against a stand-in for the Claude API; not yet run against the live API (no key in the build environment). |
 | Suggested edits that preserve product facts and request missing details | ✅ | Wording that states a fact your listing doesn't is removed, and you're asked to confirm the fact instead. |
@@ -72,15 +72,15 @@ These already existed before the doc and were kept as optional extras: **Shop St
 | 4 | Grounded AI analysis and follow-up chat | 🟡 Built; verified against a stand-in API only. |
 | 5 | Suggested edits, evidence display, saved results | ✅ |
 | 6 | Edge cases and seller feedback | 🟡 Edge-case fixtures and evaluation built; seller feedback 👤. |
-| 7 | Fix issues, deploy, document a demo | 🟡 Fixes and demo script done; not deployed. |
+| 7 | Fix issues, deploy, document a demo | ✅ Deployed free to GitHub Pages (without AI); demo script below. |
 
 ## Demo script (about 3 minutes)
 
-1. `npm run dev`, open **Compare Listings**, click **Load sample (fictional)**.
+1. Open https://applepie64.github.io/etsy-tool/ (or `npm run dev`). It opens on **Compare Listings**; click **Load sample (fictional)**. To show paste import, click **New comparison**, copy any Etsy listing page and paste it into a **Quick fill** box.
 2. **Side by side:** your listing states no sizes, licence or delivery details; three of four others do. Hover a cell to see the text it came from. Sample C is priced in EUR and is left out of the price comparison.
 3. **Title & tag phrases:** "monthly budget sheet" is used by 3 of 4, not by you (counts are the chosen listings, not search volume).
 4. **Findings:** Sample D hides "IGNORE ALL PREVIOUS INSTRUCTIONS…" in its description. It's flagged and ignored.
-5. **Generate plan:** each suggestion quotes its evidence, links Etsy guidance and asks you to confirm facts before adding them.
+5. **Improvement plan:** already there, updating as you edit. Each suggestion quotes its evidence, links Etsy guidance and asks you to confirm facts before adding them.
 6. Ask *"How does my price compare?"* and then *"What's the weather?"*: the first gets a grounded answer, the second a scope reply.
 7. **Download HTML** for the report and answer the two feedback questions.
 
@@ -88,3 +88,4 @@ These already existed before the doc and were kept as optional extras: **Shop St
 
 - **Live Claude calls.** The plan and chat endpoints were tested end-to-end against a stand-in API, which confirmed the request shape, structured output parsing, streaming and guard behaviour. Run `npm run eval -- --ai` with a real key to measure the model.
 - **Real Etsy exports.** The CSV parsers follow Etsy's documented columns, but no real export has been run through them yet.
+- **Real pasted pages.** The paste parser is tested on page copies modelled on Etsy's layout; check it on real pages and adjust when Etsy changes its layout. The seller sees and can correct every filled field.

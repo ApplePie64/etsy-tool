@@ -2,11 +2,13 @@
 
 SellerScope helps Etsy sellers work out **why their shop is or isn't selling** and what to do about it this week. Its core workflow compares your listing with 3–5 listings you choose and turns the differences into an evidence-backed improvement plan. Around it sit a listing checklist, a shop-stats dashboard, profiles of the different kinds of Etsy sellers, a 7-day course, and an advisor you can talk to about your shop.
 
+**Use it online, free:** https://applepie64.github.io/etsy-tool/ (published from `main` by GitHub Pages; the online version runs without AI, and each visitor's data stays in their own browser).
+
 What's built against the project research doc, and what isn't, is in [docs/status.md](docs/status.md).
 
 | Tab | What it does |
 |---|---|
-| **Compare Listings** | Your listing next to 3–5 listings you chose (digital downloads). A side-by-side table of price, photos, video, tags and customer-facing details (file formats, sizes, what's included, software, editing, licence, delivery, intended buyer), title/tag phrase coverage, and price position within the same currency. An **improvement plan** — from Claude, or the rules engine when AI is off — where every suggestion quotes the listing text it's based on, links Etsy's guidance, and only proposes wording built from your own product facts. Ask follow-up questions, save analyses, download an HTML/Markdown report, and record whether it was useful. |
+| **Compare Listings** | Your listing next to 3–5 listings you chose (digital downloads). **Quick fill:** copy an Etsy listing page (Ctrl+A, Ctrl+C) and paste it — title, price, currency, description and reviews fill in automatically. A side-by-side table of price, photos, video, tags and customer-facing details (file formats, sizes, what's included, software, editing, licence, delivery, intended buyer), title/tag phrase coverage, and price position within the same currency. An **improvement plan** that updates live as you type (rules engine, free), with an optional "Write with Claude" version when an API key is set — where every suggestion quotes the listing text it's based on, links Etsy's guidance, and only proposes wording built from your own product facts. Ask follow-up questions, save analyses, download an HTML/Markdown report, and record whether it was useful. |
 | **Overview** | Shop health score, last week's numbers with week-over-week changes, the most important findings, and a **personalised 7-day action plan** built from your data and seller type. |
 | **SEO Lab** | A 100-point checklist of Etsy's published listing guidance (title, 13 tags, description, photos/video, shipping, attributes) — not Etsy's ranking score and not a prediction. Lists the fixes worth the most points, suggests tags, and previews the listing in Etsy mobile search and Google. **Whole-shop mode** audits every listing from Etsy's listings CSV and finds shop-wide issues. |
 | **Shop Stats** | Log weekly visits, orders and revenue (required) plus optional views, favourites, ad spend and traffic sources — blanks stay unknown, never zero. Charts for visits, revenue and conversion; funnel; traffic-source mix; diagnostics (traffic drops by source, conversion vs your seller type, ads ROAS vs break-even, order value). Imports Etsy's **Orders CSV** (repeat buyers, coupon use, best weekdays; other currencies kept separate, cancelled/refunded orders left out) and includes a **fee & profit calculator**. |
@@ -15,6 +17,12 @@ What's built against the project research doc, and what isn't, is in [docs/statu
 | **Advisor** | Chat about your sellers, traffic, listings and pricing. Uses **Claude** when `ANTHROPIC_API_KEY` is set; otherwise answers from the app's built-in rule engine. |
 
 Everything you enter stays in your browser (`localStorage`). CSV files are read in the browser; buyer names and addresses from the orders export are discarded immediately. The advisor only ever receives aggregates — you can see exactly what it gets under **Advisor → What the advisor sees**.
+
+## Hosting it for free (GitHub Pages)
+
+Every push to `main` runs `.github/workflows/deploy-pages.yml`, which tests, builds with `VITE_STATIC=1` (no server, so no AI calls) and publishes `dist/` to GitHub Pages. One-time setup, already done for this repo: **Settings → Pages → Source: GitHub Actions**. The build uses relative paths, so it works at any URL.
+
+To run the AI features you need the Node server instead (below); any host that runs Node works.
 
 ## Quick start
 
@@ -78,7 +86,7 @@ Writes a Markdown report to `eval-results/` with pass/fail per acceptance check 
 
 ### Data sources
 
-Listings are entered by hand or imported from your own listings CSV. Etsy's API can supply listings, but only with approved API access (Etsy's developer terms disallow scraping), so it isn't wired in. Sample data is fictional and labelled.
+Listings are filled by pasting a copied listing page, typed by hand, or imported from your own listings CSV. Paste import only reads text you copied yourself; nothing is fetched from Etsy. Etsy's API can supply listings, but only with approved API access (Etsy's developer terms disallow scraping), so it isn't wired in. Sample data is fictional and labelled.
 
 ## How the SEO checklist works
 

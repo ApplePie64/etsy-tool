@@ -109,7 +109,7 @@ export function Advisor() {
           <p>Talk through your shop — traffic, conversion, SEO, pricing, ads, and how you compare with other kinds of sellers. Answers use the data you've entered in the other tabs.</p>
         </div>
         <span className="badge" title={mode === "ai" ? `Powered by ${model}` : "Rule-based answers from this app's diagnostics"}>
-          {mode === "checking" ? "Connecting…" : mode === "ai" ? "● Claude AI" : "● Offline mode"}
+          {mode === "checking" ? "Connecting…" : mode === "ai" ? "● Claude AI" : "● Built-in rules"}
         </span>
       </div>
 
@@ -119,7 +119,7 @@ export function Advisor() {
             {chat.length === 0 && pending === null && (
               <div className="msg msg-assistant">
                 <Markdown
-                  text={`Hi! I'm your Etsy growth advisor. I can see your seller profile${data.weeks.length ? `, ${data.weeks.length} week(s) of stats` : ""}${data.audit ? ", your listing audit" : ""}${advisorState.lastListing ? " and the listing in the SEO Lab" : ""}.\n\nAsk me anything, or pick a question below.${mode === "offline" ? "\n\n_Running in offline mode — answers come from this app's rule engine. Set `ANTHROPIC_API_KEY` on the server for full AI conversations._" : ""}`}
+                  text={`Hi! I'm your Etsy growth advisor. I can see your seller profile${data.weeks.length ? `, ${data.weeks.length} week(s) of stats` : ""}${data.audit ? ", your listing audit" : ""}${advisorState.lastListing ? " and the listing in the SEO Lab" : ""}.\n\nAsk me anything, or pick a question below.${mode === "offline" ? "\n\n_AI is off, so answers come from this app's built-in rules — free and private._" : ""}`}
                 />
               </div>
             )}

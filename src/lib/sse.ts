@@ -53,6 +53,8 @@ export async function streamText(url: string, body: unknown, onText: (t: string)
 
 /** Whether the server has an AI key configured. False when there's no server (static hosting). */
 export async function aiAvailable(): Promise<{ ai: boolean; model: string | null }> {
+  // Static hosting (GitHub Pages) has no server to ask.
+  if (import.meta.env.VITE_STATIC === "1") return { ai: false, model: null };
   try {
     const r = await fetch("/api/health");
     if (!r.ok) return { ai: false, model: null };
