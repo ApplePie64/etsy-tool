@@ -1598,3 +1598,56 @@ ul.evidence li {
   align-items: center;
   gap: 6px;
 }
+
+.quick-ask {
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.quick-ask button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.add-detail {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.82rem;
+  text-decoration: underline dotted;
+}
+
+.add-detail-form {
+  display: flex;
+  gap: 4px;
+}
+
+.add-detail-form input {
+  padding: 3px 6px;
+  font-size: 0.82rem;
+  min-width: 0;
+  width: 120px;
+}
+
+.compare-table.results-table th[scope="row"],
+.compare-table.results-table td {
+  min-width: 0;
+}
+
+.results-table td.num {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .results-table th,
+  .results-table td {
+    padding: 6px;
+    font-size: 0.82rem;
+  }
+}

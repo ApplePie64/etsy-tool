@@ -14,6 +14,10 @@ export interface ParsedListing {
   currencyAssumed: boolean;
   description: string | null;
   reviewCount: number | null;
+  /** Counted from the copied page's images whose alt text matches the title; null if unsure. */
+  photoCount: number | null;
+  /** True when the copied page includes a listing video; null if unsure (never guessed false). */
+  hasVideo: boolean | null;
   url: string | null;
   shopName: string | null;
   /** Field names that were filled, for the summary shown to the seller. */
@@ -105,8 +109,44 @@ function parseCount(raw: string): number | null {
   return Number.isFinite(n) ? Math.round(m[2] ? n * 1000 : n) : null;
 }
 
-export function parseListingPaste(text: string): ParsedListing {
-  const out: ParsedListing = { title: null, price: null, currency: null, currencyAssumed: false, description: null, reviewCount: null, url: null, shopName: null, found: [] };
+const decodeEntities = (s: string) =>
+  s
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCharCode(Number(n)));
+
+const normText = (s: string) => decodeEntities(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * Photos in the copied page's HTML. Only images whose alt text matches the
+ * listing title count — those are the listing's own photos, not
+ * "you may also like" thumbnails. Duplicate sizes of one photo count once.
+ */
+export function countListingMedia(html: string, title: string): { photoCount: number | null; hasVideo: boolean | null } {
+  const t = normText(title);
+  if (!html || t.length < 10) return { photoCount: null, hasVideo: null };
+  const key = t.slice(0, 30);
+  const ids = new Set<string>();
+  for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
+    const tag = m[0];
+    const alt = /\balt\s*=\s*"([^"]*)"/i.exec(tag)?.[1] ?? /\balt\s*=\s*'([^']*)'/i.exec(tag)?.[1] ?? "";
+    const a = normText(alt).replace(/^(may include|image \d+ of \d+)\s*/, "");
+    if (a.length < 10 || !(a.startsWith(key) || key.startsWith(a.slice(0, 30)))) continue;
+    const id = /il_[a-z0-9]+\.(\d+)_/i.exec(tag)?.[1] ?? /\/(\d{6,})\/il_/.exec(tag)?.[1] ?? /\bsrc\s*=\s*"([^"]+)"/i.exec(tag)?.[1];
+    if (id) ids.add(id);
+  }
+  if (!ids.size) return { photoCount: null, hasVideo: null };
+  return {
+    photoCount: Math.min(ids.size, 20),
+    hasVideo: /<video\b|v\.etsystatic\.com/i.test(html) ? true : null,
+  };
+}
+
+export function parseListingPaste(text: string, html = ""): ParsedListing {
+  const out: ParsedListing = { title: null, price: null, currency: null, currencyAssumed: false, description: null, reviewCount: null, photoCount: null, hasVideo: null, url: null, shopName: null, found: [] };
   const raw = text.replace(/\r/g, "").replace(/ /g, " ");
   const lines = raw
     .split("\n")
@@ -211,6 +251,14 @@ export function parseListingPaste(text: string): ParsedListing {
   if (description.length >= 20) {
     out.description = description.slice(0, 10000);
     out.found.push("description");
+  }
+
+  if (out.title && html) {
+    const media = countListingMedia(html, out.title);
+    out.photoCount = media.photoCount;
+    out.hasVideo = media.hasVideo;
+    if (media.photoCount !== null) out.found.push("photos");
+    if (media.hasVideo) out.found.push("video");
   }
   return out;
 }

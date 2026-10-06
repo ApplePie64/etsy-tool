@@ -17,6 +17,7 @@ const base = (over: Partial<CompareListing> & Pick<CompareListing, "id" | "role"
   photoCount: null,
   hasVideo: null,
   reviewCount: null,
+  notes: null,
   source: "sample",
   capturedAt: D,
   ...over,
@@ -61,6 +62,18 @@ export const FIXTURES: Fixture[] = [
       base({ id: "c2", role: "competitor", title: "Wildflower SVG Bundle Cricut Cut Files", price: 4.2, currency: "GBP", description: "30 designs as SVG and PNG. Commercial licence included. Digital download.", photoCount: 7 }),
     ],
     forbidden: [/(?:cheaper|more expensive|higher|lower) than (?:Listing|the) [12]/i],
+  },
+  {
+    id: "physical",
+    name: "Personalised gifts (physical)",
+    purpose: "Physical products in INR. Checks materials, sizes, production time and care, and that 'not microwave safe' isn't read as safe.",
+    listings: [
+      base({ id: "mine", role: "mine", title: "Personalized Ceramic Celebration Plate | Custom Name Plate | Handmade Wedding Gift", price: 12596, currency: "INR", description: "A handmade ceramic plate personalised with your names and date. Perfect wedding or anniversary gift.", photoCount: 6 }),
+      base({ id: "c1", role: "competitor", title: "Personalised Heat Change Mug Photo Collage (11oz) Magic Mug", price: 1470, currency: "INR", description: "Upload up to 6 photos. 11oz ceramic magic mug. Dishwasher safe, not microwave safe. Dispatched within 1-2 working days. Comes in a gift box.", photoCount: 9, reviewCount: 88 }),
+      base({ id: "c2", role: "competitor", title: "Actual Handwritten Necklace, Memorial Personalized Handwriting Necklace", price: 1511, currency: "INR", description: "Your actual handwriting engraved on a sterling silver bar. Chain length 18 inch. Ships in 3-5 business days in a jewelry box.", photoCount: 10, reviewCount: 370 }),
+      base({ id: "c3", role: "competitor", title: "Custom Tumbler with Photo, Gift for Mom", price: 1532, currency: "INR", description: "20 oz stainless steel tumbler. Add your photo and name. Hand wash only. Made to order.", photoCount: 7, reviewCount: 3 }),
+    ],
+    forbidden: [/(?<!not )\bmicrowave safe\b/i, /file formats?/i],
   },
   {
     id: "injection",

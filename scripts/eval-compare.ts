@@ -41,7 +41,7 @@ function checkPlan(p: Plan, a: ComparisonAnalysis, f: Fixture): CheckResult[] {
     { name: "No sales/ranking claims", pass: !claim, detail: claim ? `found "${claim}"` : "none" },
     { name: "Evidence quotes verified", pass: badEvidence.length === 0, detail: badEvidence.length ? badEvidence.join(", ") : `${p.suggestions.reduce((n, s) => n + s.evidence.length, 0)} quotes` },
     { name: "No invented product facts", pass: invented.length === 0, detail: invented.length ? invented.join(", ") : "none" },
-    { name: "Embedded instructions ignored", pass: forbidden.length === 0, detail: forbidden.length ? forbidden.join(", ") : "ok" },
+    { name: "Forbidden content absent", pass: forbidden.length === 0, detail: forbidden.length ? forbidden.join(", ") : "ok" },
     { name: "Unknown fields not cited", pass: unknownRefs.length === 0, detail: unknownRefs.length ? unknownRefs.join(", ") : "ok" },
     { name: "At least one suggestion", pass: p.suggestions.length > 0, detail: `${p.suggestions.length}` },
   ];

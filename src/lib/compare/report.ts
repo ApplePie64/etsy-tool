@@ -1,9 +1,11 @@
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from "./attributes";
+import { ATTRIBUTE_LABELS, type AttributeKey } from "./attributes";
 import { formatCount, formatPrice, labelOf, type ComparisonAnalysis } from "./analyze";
 import { GUIDANCE_BY_ID } from "./guidance";
 import type { Plan } from "./plan";
 import { SAMPLE_NOTICE } from "./sample";
-import { CATEGORY_LABELS, type Category } from "./types";
+import { compareStats, conversion, diffSnapshots, resultsSummary, shopTrend, snapshotOf, trackingWindows, VERDICT_TEXT, type TrackedChange } from "./tracking";
+import { CATEGORY_LABELS } from "./types";
+import type { WeekStats } from "../stats/metrics";
 
 export interface Feedback {
   changedDecision: "yes" | "no" | "unsure" | null;
@@ -13,11 +15,14 @@ export interface Feedback {
 
 export interface ReportInput {
   name: string;
-  category: Category;
   createdAt: string;
   analysis: ComparisonAnalysis;
   plan: Plan | null;
   feedback: Feedback | null;
+  /** Changes made on Etsy and their before/after stats. */
+  changes?: TrackedChange[];
+  /** The shop's weekly stats, for the shop-trend comparison. */
+  weeks?: WeekStats[];
 }
 
 const DISCLAIMER =
@@ -25,16 +30,49 @@ const DISCLAIMER =
 
 const cell = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
 
-function attrCell(a: ComparisonAnalysis, id: string, key: (typeof ATTRIBUTE_KEYS)[number]): string {
+function attrCell(a: ComparisonAnalysis, id: string, key: AttributeKey): string {
   const r = a.attributes[id]![key];
   return r.status === "stated" ? r.values.join(", ") : r.status === "unknown" ? "Unknown" : "Not stated";
 }
 
-export function reportMarkdown({ name, category, createdAt, analysis: a, plan, feedback }: ReportInput): string {
+const pctText = (n: number | null) => (n === null ? "—" : `${n > 0 ? "+" : ""}${Math.round(n)}%`);
+
+function trackingMarkdown(changes: TrackedChange[], a: ComparisonAnalysis, weeks: WeekStats[]): string[] {
+  const lines: string[] = ["## Changes made on Etsy", ""];
+  for (const t of changes) {
+    const w = trackingWindows(t);
+    lines.push(`### Changed on ${t.changedOn}`, "");
+    for (const x of t.applied) lines.push(`- Applied: ${x}`);
+    if (t.note) lines.push(`- Also: ${t.note}`);
+    const after = t.after ?? (a.mine ? snapshotOf(a.mine) : null);
+    const diff = after ? diffSnapshots(t.before, after, a.category) : [];
+    for (const d of diff) lines.push(`- ${d.label}: ${cell(d.summary)}`);
+    if (!diff.length) lines.push("- The listing recorded here hasn't changed since this record was saved.");
+    lines.push("");
+    if (!t.statsBefore || !t.statsAfter) {
+      lines.push(`Results: compare ${w.before.from}–${w.before.to} with ${w.after.from}–${w.after.to} in Etsy Stats from ${w.checkOn}.`, "");
+      continue;
+    }
+    const trend = shopTrend(weeks, t);
+    const results = compareStats(t.statsBefore, t.statsAfter, trend);
+    lines.push(`Etsy Stats, ${w.before.from}–${w.before.to} vs ${w.after.from}–${w.after.to}:`, "");
+    lines.push(`| | Before | After | Change |${trend ? " vs your shop |" : ""} Reading |`, `|---|---|---|---|${trend ? "---|" : ""}---|`);
+    for (const r of results) {
+      lines.push(`| ${r.label} | ${r.before ?? "—"} | ${r.after ?? "—"} | ${pctText(r.change)} |${trend ? ` ${pctText(r.vsShop)} |` : ""} ${VERDICT_TEXT[r.verdict]} |`);
+    }
+    const cb = conversion(t.statsBefore);
+    const ca = conversion(t.statsAfter);
+    if (cb !== null && ca !== null) lines.push(`| Conversion | ${cb.toFixed(1)}% | ${ca.toFixed(1)}% | ${(ca - cb).toFixed(1)} pts |${trend ? " |" : ""} Orders ÷ visits |`);
+    lines.push("", resultsSummary(results, trend), "");
+  }
+  return lines;
+}
+
+export function reportMarkdown({ name, createdAt, analysis: a, plan, feedback, changes = [], weeks = [] }: ReportInput): string {
   const L = a.listings;
   const lines: string[] = [];
   lines.push(`# ${name}`, "");
-  lines.push(`${CATEGORY_LABELS[category]} · created ${createdAt.slice(0, 10)} · report generated ${new Date().toISOString().slice(0, 10)}`, "");
+  lines.push(`${CATEGORY_LABELS[a.category]} · created ${createdAt.slice(0, 10)} · report generated ${new Date().toISOString().slice(0, 10)}`, "");
   if (L.some((l) => l.source === "sample")) lines.push(`> ${SAMPLE_NOTICE}`, "");
   lines.push(`> ${DISCLAIMER}`, "");
 
@@ -49,7 +87,7 @@ export function reportMarkdown({ name, category, createdAt, analysis: a, plan, f
 
   lines.push("## Customer-facing details", "");
   lines.push(`| Detail | ${L.map((l) => cell(l.label)).join(" | ")} |`, `|---|${L.map(() => "---").join("|")}|`);
-  for (const k of ATTRIBUTE_KEYS) lines.push(`| ${ATTRIBUTE_LABELS[k]} | ${L.map((l) => cell(attrCell(a, l.id, k))).join(" | ")} |`);
+  for (const k of a.attributeKeys) lines.push(`| ${ATTRIBUTE_LABELS[k]} | ${L.map((l) => cell(attrCell(a, l.id, k))).join(" | ")} |`);
   lines.push("");
 
   if (a.coverage.terms.length) {
@@ -99,6 +137,8 @@ export function reportMarkdown({ name, category, createdAt, analysis: a, plan, f
       lines.push("### Information that would improve this comparison", "", ...plan.missingInfo.map((m) => `- ${m}`), "");
     }
   }
+
+  if (changes.length) lines.push(...trackingMarkdown(changes, a, weeks));
 
   if (feedback && (feedback.changedDecision || feedback.wouldReuse || feedback.note)) {
     lines.push("## Your feedback", "");

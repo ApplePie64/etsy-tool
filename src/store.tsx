@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { AdvisorState } from "./lib/advisor/context";
 import type { Plan } from "./lib/compare/plan";
 import type { Feedback } from "./lib/compare/report";
+import type { TrackedChange } from "./lib/compare/tracking";
 import type { Category, CompareListing } from "./lib/compare/types";
 import type { ListingInput } from "./lib/seo/analyzer";
 import { analyzeListing } from "./lib/seo/analyzer";
@@ -25,7 +26,10 @@ export type SavedAudit = Pick<BulkAuditSummary, "listings" | "averageScore" | "g
 export interface SavedComparison {
   id: string;
   name: string;
+  /** Legacy; the product type is detected from the listings unless categoryChoice is set. */
   category: Category;
+  /** The seller's explicit product type; undefined means detect it automatically. */
+  categoryChoice?: Category;
   createdAt: string;
   updatedAt: string;
   /** When the listings last changed; a plan older than this is stale. */
@@ -34,6 +38,8 @@ export interface SavedComparison {
   plan: Plan | null;
   chat: ChatTurn[];
   feedback: Feedback;
+  /** Changes the seller made on Etsy, newest first, with before/after stats. */
+  changes?: TrackedChange[];
 }
 
 export interface AppData {

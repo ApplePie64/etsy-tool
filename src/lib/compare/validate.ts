@@ -1,4 +1,7 @@
-import { MAX_COMPETITORS, type CompareListing, type ListingSource } from "./types";
+import { MAX_COMPETITORS, type Category, type CompareListing, type ListingSource } from "./types";
+
+/** "digital" or "physical"; anything else means detect it from the listings. */
+export const sanitizeCategory = (v: unknown): Category | undefined => (v === "digital" || v === "physical" ? v : undefined);
 
 /**
  * Turns an untrusted payload (from the browser, or the server's request body)
@@ -43,6 +46,7 @@ export function sanitizeListing(raw: unknown, index: number): CompareListing | n
     photoCount: int(r.photoCount),
     hasVideo: typeof r.hasVideo === "boolean" ? r.hasVideo : null,
     reviewCount: int(r.reviewCount),
+    notes: str(r.notes, 2000),
     source,
     capturedAt: captured && /^\d{4}-\d{2}-\d{2}$/.test(captured) ? captured : new Date().toISOString().slice(0, 10),
   };

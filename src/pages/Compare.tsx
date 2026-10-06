@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ListingEditor } from "../components/compare/ListingEditor";
 import { ComparisonTable, CoverageTable, EvidenceList, FindingsList, GuidanceLinks, PriceSummary } from "../components/compare/Results";
+import { TrackSection } from "../components/compare/Tracking";
 import { Empty, Markdown } from "../components/ui";
 import { parseCsvRecords, parseMoney } from "../lib/csv";
 import { analyzeComparison } from "../lib/compare/analyze";
@@ -9,8 +10,11 @@ import { localCompareAnswer } from "../lib/compare/localChat";
 import { rulesPlan, type Plan } from "../lib/compare/plan";
 import { reportHtml, reportMarkdown, type Feedback } from "../lib/compare/report";
 import { SAMPLE_NOTICE, sampleComparison } from "../lib/compare/sample";
-import { CATEGORY_LABELS, MAX_COMPETITORS, RECOMMENDED_COMPETITORS, type CompareListing } from "../lib/compare/types";
+import { localToday, trackingStage } from "../lib/compare/tracking";
+import { ATTRIBUTE_LABELS, detectCategory, type AttributeKey } from "../lib/compare/attributes";
+import { CATEGORY_LABELS, MAX_COMPETITORS, RECOMMENDED_COMPETITORS, type Category, type CompareListing } from "../lib/compare/types";
 import { aiAvailable, ApiError, postJson, streamText } from "../lib/sse";
+import type { WeekStats } from "../lib/stats/metrics";
 import { useStore, type ChatTurn, type SavedComparison } from "../store";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -30,6 +34,7 @@ function blankListing(id: string, role: CompareListing["role"]): CompareListing 
     photoCount: null,
     hasVideo: null,
     reviewCount: null,
+    notes: null,
     source: "manual",
     capturedAt: today(),
   };
@@ -65,6 +70,7 @@ export function Compare() {
   const create = (c: SavedComparison) => update((d) => ({ comparisons: [c, ...d.comparisons], activeComparison: c.id }));
   const startBlank = () => create(newComparison(`Comparison ${data.comparisons.length + 1}`, [blankListing("mine", "mine"), blankListing("c1", "competitor"), blankListing("c2", "competitor"), blankListing("c3", "competitor")]));
   const startSample = () => create(newComparison("Sample: budget planner printables", sampleComparison()));
+  const due = data.comparisons.flatMap((c) => (c.changes ?? []).filter((t) => trackingStage(t, localToday()) === "due").map((t) => ({ c, t })));
 
   return (
     <div className="stack">
@@ -103,6 +109,19 @@ export function Compare() {
         </div>
       )}
 
+      {due.length > 0 && (
+        <div className="callout small row" role="status">
+          <span style={{ flex: 1, minWidth: 200 }}>
+            <strong>Results ready to check:</strong> {due.map(({ c, t }) => `${c.name} (changed ${t.changedOn})`).join(", ")}. Enter the listing's Etsy Stats in "Did it work?".
+          </span>
+          {due[0]!.c.id !== active?.id && (
+            <button className="btn btn-sm" onClick={() => update({ activeComparison: due[0]!.c.id })}>
+              Open
+            </button>
+          )}
+        </div>
+      )}
+
       {active ? (
         <Workspace key={active.id} comparison={active} ai={ai} />
       ) : (
@@ -119,7 +138,7 @@ export function Compare() {
             </>
           }
         >
-          Category: {CATEGORY_LABELS.digital}. Copy each listing's details from Etsy by hand — titles, descriptions, prices and photo counts are on the listing page; competitors' tags usually aren't, so leave them blank.
+          Works for physical products and digital downloads. Open a listing on Etsy, press Ctrl+A then Ctrl+C, and paste it into a Quick fill box — the details fill in for you.
         </Empty>
       )}
     </div>
@@ -136,8 +155,15 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
   const ready = c.listings.filter((l) => l.title.trim());
   const analysis = useMemo(() => {
     const ls = c.listings.filter((l) => l.title.trim());
-    return ls.some((l) => l.role === "mine") && ls.some((l) => l.role === "competitor") ? analyzeComparison(ls) : null;
-  }, [c.listings]);
+    return ls.some((l) => l.role === "mine") && ls.some((l) => l.role === "competitor") ? analyzeComparison(ls, c.categoryChoice) : null;
+  }, [c.listings, c.categoryChoice]);
+  const detected = useMemo(() => detectCategory(c.listings.filter((l) => l.title.trim())), [c.listings]);
+  const addDetail = (listingId: string, key: AttributeKey, value: string) => {
+    const l = c.listings.find((x) => x.id === listingId);
+    if (!l) return;
+    const line = `${ATTRIBUTE_LABELS[key]}: ${value}`;
+    editListing(listingId, { notes: l.notes ? `${l.notes.trimEnd()}\n${line}` : line });
+  };
   // Open the input sections only if the comparison starts empty; never collapse them while typing.
   const [inputsOpen] = useState(() => !analysis);
   const competitors = c.listings.filter((l) => l.role === "competitor");
@@ -184,7 +210,14 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
             <span className="visually-hidden">Analysis name</span>
             <input type="text" value={c.name} onChange={(e) => patch({ name: e.target.value })} style={{ fontWeight: 600, fontSize: "1rem" }} />
           </label>
-          <span className="badge badge-accent">{CATEGORY_LABELS[c.category]}</span>
+          <label className="row small" style={{ gap: 6 }}>
+            <span className="muted">Product type</span>
+            <select value={c.categoryChoice ?? "auto"} onChange={(e) => patch({ categoryChoice: e.target.value === "auto" ? undefined : (e.target.value as Category) })}>
+              <option value="auto">Auto ({CATEGORY_LABELS[detected].toLowerCase()})</option>
+              <option value="physical">{CATEGORY_LABELS.physical}</option>
+              <option value="digital">{CATEGORY_LABELS.digital}</option>
+            </select>
+          </label>
           <button
             className="btn btn-sm btn-ghost"
             onClick={() => {
@@ -304,7 +337,7 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
               <h2>3. Side by side</h2>
               <p>Hover a detail to see the text it was found in</p>
             </div>
-            <ComparisonTable a={analysis} />
+            <ComparisonTable a={analysis} onAddDetail={addDetail} />
           </div>
           <div className="card">
             <div className="card-head">
@@ -331,7 +364,19 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
 
           <PlanSection plan={shownPlan} hasAiPlan={!!aiPlan} analysis={analysis} ai={ai} stale={planStale} onPlan={(plan) => patch({ plan })} />
           <ChatSection comparison={c} plan={shownPlan} analysis={analysis} ai={ai} onChat={(chat) => patch({ chat })} />
-          <ReportSection comparison={c} plan={shownPlan} analysis={analysis} onFeedback={(feedback) => patch({ feedback })} />
+          <TrackSection
+            changes={c.changes ?? []}
+            mine={mine}
+            analysis={analysis}
+            plan={shownPlan}
+            weeks={data.weeks}
+            onChanges={(changes) => patch({ changes })}
+            onEditMine={(p) => {
+              editListing("mine", p);
+              setMineVersion((v) => v + 1);
+            }}
+          />
+          <ReportSection comparison={c} plan={shownPlan} analysis={analysis} weeks={data.weeks} onFeedback={(feedback) => patch({ feedback })} />
           <p className="tiny muted">{ready.length} listings in this analysis · created {c.createdAt.slice(0, 10)}</p>
         </>
       )}
@@ -362,7 +407,7 @@ function PlanSection({
     setBusy(true);
     setNotice(null);
     try {
-      const { plan } = await postJson<{ plan: Plan }>("/api/compare/plan", { listings: analysis.listings });
+      const { plan } = await postJson<{ plan: Plan }>("/api/compare/plan", { listings: analysis.listings, category: analysis.category });
       onPlan(plan);
     } catch (e) {
       setNotice(`Claude couldn't write a plan (${e instanceof ApiError ? e.message : "network error"}). The rules-based plan below still applies.`);
@@ -511,7 +556,7 @@ function ChatSection({
     try {
       const { notice } = await streamText(
         "/api/compare/chat",
-        { listings: analysis.listings, plan, messages: history },
+        { listings: analysis.listings, category: analysis.category, plan, messages: history },
         (t) => {
           text += t;
           setPending(text);
@@ -606,14 +651,16 @@ function ReportSection({
   comparison: c,
   plan,
   analysis,
+  weeks,
   onFeedback,
 }: {
   comparison: SavedComparison;
   plan: Plan | null;
   analysis: ReturnType<typeof analyzeComparison>;
+  weeks: WeekStats[];
   onFeedback: (f: Feedback) => void;
 }) {
-  const input = { name: c.name, category: c.category, createdAt: c.createdAt, analysis, plan, feedback: c.feedback };
+  const input = { name: c.name, createdAt: c.createdAt, analysis, plan, feedback: c.feedback, changes: c.changes ?? [], weeks };
   const fb = c.feedback;
   const radio = <K extends "changedDecision" | "wouldReuse">(k: K, v: NonNullable<Feedback[K]>, label: string) => (
     <label className="check" key={`${k}-${v}`}>
@@ -623,7 +670,7 @@ function ReportSection({
   return (
     <div className="grid grid-2" style={{ alignItems: "start" }}>
       <div className="card stack-sm">
-        <h2>6. Download the report</h2>
+        <h2>7. Download the report</h2>
         <p className="sub">Everything above — listings, evidence, plan, and what the safety checks removed — with the date. Open the HTML file and print it to save a PDF.</p>
         <div className="row">
           <button className="btn btn-primary btn-sm" onClick={() => download(`${slug(c.name)}.html`, reportHtml(input), "text/html")}>

@@ -1,16 +1,48 @@
-import { Fragment } from "react";
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from "../../lib/compare/attributes";
-import { formatAmount, formatCount, formatPrice, labelOf, parseRef, FIELD_LABELS, type ComparisonAnalysis, type CompareFinding, type CoverageStatus } from "../../lib/compare/analyze";
+import { Fragment, useState } from "react";
+import { ATTRIBUTE_LABELS, type AttributeKey } from "../../lib/compare/attributes";
+import { displayAmount, formatCount, formatPrice, labelOf, parseRef, FIELD_LABELS, type ComparisonAnalysis, type CompareFinding, type CoverageStatus } from "../../lib/compare/analyze";
 import { GUIDANCE_BY_ID } from "../../lib/compare/guidance";
-import type { Evidence } from "../../lib/compare/types";
+import { CATEGORY_LABELS, type Evidence } from "../../lib/compare/types";
 import type { Severity } from "../../lib/stats/metrics";
 import { StatusBadge } from "../ui";
 
 const UNKNOWN = <span className="unknown">Unknown</span>;
-const NOT_STATED = <span className="muted">Not stated</span>;
 
-/** Side-by-side table: basic fields plus customer-facing details, with the source snippet on hover. */
-export function ComparisonTable({ a }: { a: ComparisonAnalysis }) {
+/** "+ Add" link that opens a one-line input; saves "Label: value" into the listing's notes. */
+function AddDetail({ label, onAdd }: { label: string; onAdd: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  if (!open) {
+    return (
+      <button type="button" className="add-detail" onClick={() => setOpen(true)} title={`Add ${label.toLowerCase()} you've seen, e.g. in the photos`}>
+        Not stated · add
+      </button>
+    );
+  }
+  const save = () => {
+    if (value.trim()) onAdd(value.trim());
+    setOpen(false);
+    setValue("");
+  };
+  return (
+    <form
+      className="add-detail-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder={label} aria-label={label} onBlur={save} />
+    </form>
+  );
+}
+
+/**
+ * Side-by-side table: basic fields plus customer-facing details, with the
+ * source snippet on hover. Missing details can be added in place; details no
+ * listing mentions are folded into one line instead of a wall of "Not stated".
+ */
+export function ComparisonTable({ a, onAddDetail }: { a: ComparisonAnalysis; onAddDetail?: (listingId: string, key: AttributeKey, value: string) => void }) {
   const L = a.listings;
   const row = (label: string, render: (id: string) => React.ReactNode) => (
     <tr>
@@ -23,6 +55,8 @@ export function ComparisonTable({ a }: { a: ComparisonAnalysis }) {
     </tr>
   );
   const get = (id: string) => L.find((l) => l.id === id)!;
+  const mentioned = a.attributeKeys.filter((k) => L.some((l) => a.attributes[l.id]![k].status === "stated"));
+  const unmentioned = a.attributeKeys.filter((k) => !mentioned.includes(k));
   return (
     <div className="table-wrap">
       <table className="compare-table">
@@ -49,23 +83,40 @@ export function ComparisonTable({ a }: { a: ComparisonAnalysis }) {
           {row("Price", (id) => (get(id).price === null ? UNKNOWN : formatPrice(get(id).price, get(id).currency)))}
           {row("Photos", (id) => (get(id).photoCount === null ? UNKNOWN : get(id).photoCount))}
           {row("Video", (id) => (get(id).hasVideo === null ? UNKNOWN : get(id).hasVideo ? "Yes" : "No"))}
-          {row("Tags", (id) => (get(id).tags === null ? UNKNOWN : get(id).tags!.length))}
-          {row("Reviews", (id) => (get(id).reviewCount === null ? UNKNOWN : get(id).reviewCount!.toLocaleString("en-US")))}
+          {row("Tags", (id) => {
+            const l = get(id);
+            if (l.tags !== null) return l.tags.length;
+            return <span className="muted">{l.role === "mine" ? "Not added" : "Not shown on Etsy"}</span>;
+          })}
+          {row("Reviews", (id) => {
+            const l = get(id);
+            if (l.role === "mine") return <span className="muted">—</span>;
+            return l.reviewCount === null ? UNKNOWN : l.reviewCount.toLocaleString("en-US");
+          })}
           <tr>
             <th colSpan={L.length + 1} className="section-row">
-              Customer-facing details (found in each listing's own text)
+              What each listing tells buyers ({CATEGORY_LABELS[a.category].toLowerCase()})
             </th>
           </tr>
-          {ATTRIBUTE_KEYS.map((k) => (
+          {mentioned.map((k) => (
             <Fragment key={k}>
               {row(ATTRIBUTE_LABELS[k], (id) => {
                 const r = a.attributes[id]![k];
-                if (r.status === "unknown") return UNKNOWN;
-                if (r.status === "not_stated") return NOT_STATED;
-                return <span title={r.evidence.map((e) => `${e.field}: ${e.snippet}`).join("\n")}>{r.values.join(", ")}</span>;
+                if (r.status === "stated") {
+                  return <span title={r.evidence.map((e) => `${e.field}: ${e.snippet}`).join("\n")}>{r.values.join(", ")}</span>;
+                }
+                if (onAddDetail) return <AddDetail label={ATTRIBUTE_LABELS[k]} onAdd={(v) => onAddDetail(id, k, v)} />;
+                return r.status === "unknown" ? UNKNOWN : <span className="muted">Not stated</span>;
               })}
             </Fragment>
           ))}
+          {unmentioned.length > 0 && (
+            <tr>
+              <td colSpan={L.length + 1} className="tiny muted">
+                No listing mentions: {unmentioned.map((k) => ATTRIBUTE_LABELS[k].toLowerCase()).join(", ")}.
+              </td>
+            </tr>
+          )}
           {row("Recorded", (id) => <span className="tiny muted">{get(id).capturedAt}</span>)}
         </tbody>
       </table>
@@ -136,7 +187,7 @@ export function PriceSummary({ a }: { a: ComparisonAnalysis }) {
       {a.price.groups.map((g) => (
         <div key={g.currency}>
           <strong>{g.currency}</strong>: {g.listings.length} listing{g.listings.length === 1 ? "" : "s"}
-          {g.listings.some((x) => x.id === mine?.id) ? " incl. yours" : ""}, {formatAmount(g.min)}–{formatAmount(g.max)} (median {formatAmount(g.median)})
+          {g.listings.some((x) => x.id === mine?.id) ? " incl. yours" : ""}, {displayAmount(g.min)}–{displayAmount(g.max)} (median {displayAmount(g.median)})
         </div>
       ))}
       {mine && a.price.position !== "unknown" && a.price.position !== "no-comparison" && (

@@ -3,6 +3,7 @@ import { shortDate } from "../components/charts/scale";
 import { Meter, StatTile } from "../components/charts/Tiles";
 import { FindingCard } from "../components/ui";
 import { COURSE } from "../lib/academy/course";
+import { localToday, trackingStage } from "../lib/compare/tracking";
 import { buildWeeklyPlan, planMinutes } from "../lib/plan/weeklyPlan";
 import { classifySeller } from "../lib/sellers/archetypes";
 import { diagnose, money, pct, shopHealth, summarize } from "../lib/stats/metrics";
@@ -21,6 +22,8 @@ export function Overview() {
   const allTasks = plan.flatMap((d) => d.tasks.map((t) => `${d.day}:${t.id}`));
   const doneCount = allTasks.filter((k) => data.planDone[k]).length;
   const nextLesson = COURSE.find((l) => !data.academy.completed.includes(l.day));
+  const tracked = data.comparisons.flatMap((c) => c.changes ?? []);
+  const dueCount = tracked.filter((t) => trackingStage(t, localToday()) === "due").length;
   const isNew = !data.profileSet && data.weeks.length === 0 && !data.audit;
 
   const loadDemo = () =>
@@ -200,6 +203,12 @@ export function Overview() {
               ? `${data.comparisons.length} saved. Latest: ${data.comparisons[0]!.name}${data.comparisons[0]!.plan ? ` — ${data.comparisons[0]!.plan.suggestions.length} suggestions` : ""}.`
               : "Compare your listing with listings you want to learn from."}
           </p>
+          {tracked.length > 0 && (
+            <p className={`small${dueCount ? " ask" : " muted"}`} style={{ margin: 0 }}>
+              {tracked.length} change{tracked.length === 1 ? "" : "s"} tracked
+              {dueCount ? ` · ${dueCount} ready to check — enter the Etsy Stats to see if it worked` : ""}.
+            </p>
+          )}
           <button className="btn btn-sm" style={{ alignSelf: "flex-start", marginTop: 6 }} onClick={() => go("compare")}>
             Open Compare Listings
           </button>

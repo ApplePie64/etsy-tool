@@ -24,13 +24,15 @@ export interface CompareListing {
   hasVideo: boolean | null;
   /** Review count as the seller saw it on the listing page. Context only; never turned into sales. */
   reviewCount: number | null;
+  /** Details the seller added themselves (e.g. seen in photos), like "Material: stoneware". */
+  notes: string | null;
   source: ListingSource;
   /** Date (YYYY-MM-DD) the seller recorded this listing's details. */
   capturedAt: string;
 }
 
 /** Fields an evidence reference may point at, e.g. "c2.description". */
-export const EVIDENCE_FIELDS = ["title", "tags", "description", "price", "currency", "photoCount", "hasVideo", "reviewCount"] as const;
+export const EVIDENCE_FIELDS = ["title", "tags", "description", "notes", "price", "currency", "photoCount", "hasVideo", "reviewCount"] as const;
 export type EvidenceField = (typeof EVIDENCE_FIELDS)[number];
 
 export interface Evidence {
@@ -40,10 +42,11 @@ export interface Evidence {
   quote: string;
 }
 
-export type Category = "digital";
+export type Category = "digital" | "physical";
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   digital: "Digital downloads",
+  physical: "Physical products",
 };
 
 export const MAX_COMPETITORS = 5;
