@@ -47,6 +47,12 @@ All are automated in `src/lib/compare/compare.test.ts`. `npm run eval` runs them
 | Competitor sales/revenue estimates | ⛔ | Deliberately not built, per the doc. |
 | Historical trends | ⛔ | Only your own logged weeks. |
 
+## Beyond the MVP
+
+| Feature | Status | Notes |
+|---|---|---|
+| Before/after tracking ("Did it work?") | ✅ | Records the date and the suggestions applied, keeps the before version, and lists what changed. Gives the exact Etsy Stats date ranges, a Google Calendar / .ics reminder, and a results table. A two-sided binomial test (p < 0.01, at least 10 events) labels each metric "clear increase/decrease", "could be chance" or "too few to tell". With weekly Shop Stats covering both periods, it allows for the shop's overall trend. The results never claim the edit caused the change. Included in the report. |
+
 ## Deferred in the doc
 
 Not built: own sales estimator, historical trend database, live traffic integration, automatic listing edits, billing, browser extension.
@@ -82,7 +88,8 @@ These already existed before the doc and were kept as optional extras: **Shop St
 4. **Findings:** Sample D hides "IGNORE ALL PREVIOUS INSTRUCTIONS…" in its description. It's flagged and ignored.
 5. **Improvement plan:** already there, updating as you edit. Each suggestion quotes its evidence, links Etsy guidance and asks you to confirm facts before adding them.
 6. Ask *"How does my price compare?"* and then *"What's the weather?"*: the first gets a grounded answer, the second a scope reply.
-7. **Download HTML** for the report and answer the two feedback questions.
+7. **Did it work?** Tick two suggestions, set the change date 40 days back and save. Paste an updated listing into the box to see what changed, then enter 400/20/4 before and 560/24/6 after: visits read as a clear increase, and orders read as could be chance.
+8. **Download HTML** for the report (it includes the tracked change) and answer the two feedback questions.
 
 ## Not yet verified
 

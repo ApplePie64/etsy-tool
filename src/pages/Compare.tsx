@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ListingEditor } from "../components/compare/ListingEditor";
 import { ComparisonTable, CoverageTable, EvidenceList, FindingsList, GuidanceLinks, PriceSummary } from "../components/compare/Results";
+import { TrackSection } from "../components/compare/Tracking";
 import { Empty, Markdown } from "../components/ui";
 import { parseCsvRecords, parseMoney } from "../lib/csv";
 import { analyzeComparison } from "../lib/compare/analyze";
@@ -9,9 +10,11 @@ import { localCompareAnswer } from "../lib/compare/localChat";
 import { rulesPlan, type Plan } from "../lib/compare/plan";
 import { reportHtml, reportMarkdown, type Feedback } from "../lib/compare/report";
 import { SAMPLE_NOTICE, sampleComparison } from "../lib/compare/sample";
+import { localToday, trackingStage } from "../lib/compare/tracking";
 import { ATTRIBUTE_LABELS, detectCategory, type AttributeKey } from "../lib/compare/attributes";
 import { CATEGORY_LABELS, MAX_COMPETITORS, RECOMMENDED_COMPETITORS, type Category, type CompareListing } from "../lib/compare/types";
 import { aiAvailable, ApiError, postJson, streamText } from "../lib/sse";
+import type { WeekStats } from "../lib/stats/metrics";
 import { useStore, type ChatTurn, type SavedComparison } from "../store";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -67,6 +70,7 @@ export function Compare() {
   const create = (c: SavedComparison) => update((d) => ({ comparisons: [c, ...d.comparisons], activeComparison: c.id }));
   const startBlank = () => create(newComparison(`Comparison ${data.comparisons.length + 1}`, [blankListing("mine", "mine"), blankListing("c1", "competitor"), blankListing("c2", "competitor"), blankListing("c3", "competitor")]));
   const startSample = () => create(newComparison("Sample: budget planner printables", sampleComparison()));
+  const due = data.comparisons.flatMap((c) => (c.changes ?? []).filter((t) => trackingStage(t, localToday()) === "due").map((t) => ({ c, t })));
 
   return (
     <div className="stack">
@@ -102,6 +106,19 @@ export function Compare() {
             </select>
           </label>
           <span className="tiny muted">{data.comparisons.length} saved in this browser · changes save automatically</span>
+        </div>
+      )}
+
+      {due.length > 0 && (
+        <div className="callout small row" role="status">
+          <span style={{ flex: 1, minWidth: 200 }}>
+            <strong>Results ready to check:</strong> {due.map(({ c, t }) => `${c.name} (changed ${t.changedOn})`).join(", ")}. Enter the listing's Etsy Stats in "Did it work?".
+          </span>
+          {due[0]!.c.id !== active?.id && (
+            <button className="btn btn-sm" onClick={() => update({ activeComparison: due[0]!.c.id })}>
+              Open
+            </button>
+          )}
         </div>
       )}
 
@@ -347,7 +364,19 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
 
           <PlanSection plan={shownPlan} hasAiPlan={!!aiPlan} analysis={analysis} ai={ai} stale={planStale} onPlan={(plan) => patch({ plan })} />
           <ChatSection comparison={c} plan={shownPlan} analysis={analysis} ai={ai} onChat={(chat) => patch({ chat })} />
-          <ReportSection comparison={c} plan={shownPlan} analysis={analysis} onFeedback={(feedback) => patch({ feedback })} />
+          <TrackSection
+            changes={c.changes ?? []}
+            mine={mine}
+            analysis={analysis}
+            plan={shownPlan}
+            weeks={data.weeks}
+            onChanges={(changes) => patch({ changes })}
+            onEditMine={(p) => {
+              editListing("mine", p);
+              setMineVersion((v) => v + 1);
+            }}
+          />
+          <ReportSection comparison={c} plan={shownPlan} analysis={analysis} weeks={data.weeks} onFeedback={(feedback) => patch({ feedback })} />
           <p className="tiny muted">{ready.length} listings in this analysis · created {c.createdAt.slice(0, 10)}</p>
         </>
       )}
@@ -622,14 +651,16 @@ function ReportSection({
   comparison: c,
   plan,
   analysis,
+  weeks,
   onFeedback,
 }: {
   comparison: SavedComparison;
   plan: Plan | null;
   analysis: ReturnType<typeof analyzeComparison>;
+  weeks: WeekStats[];
   onFeedback: (f: Feedback) => void;
 }) {
-  const input = { name: c.name, createdAt: c.createdAt, analysis, plan, feedback: c.feedback };
+  const input = { name: c.name, createdAt: c.createdAt, analysis, plan, feedback: c.feedback, changes: c.changes ?? [], weeks };
   const fb = c.feedback;
   const radio = <K extends "changedDecision" | "wouldReuse">(k: K, v: NonNullable<Feedback[K]>, label: string) => (
     <label className="check" key={`${k}-${v}`}>
@@ -639,7 +670,7 @@ function ReportSection({
   return (
     <div className="grid grid-2" style={{ alignItems: "start" }}>
       <div className="card stack-sm">
-        <h2>6. Download the report</h2>
+        <h2>7. Download the report</h2>
         <p className="sub">Everything above — listings, evidence, plan, and what the safety checks removed — with the date. Open the HTML file and print it to save a PDF.</p>
         <div className="row">
           <button className="btn btn-primary btn-sm" onClick={() => download(`${slug(c.name)}.html`, reportHtml(input), "text/html")}>

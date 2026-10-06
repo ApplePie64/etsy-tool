@@ -152,7 +152,7 @@ const FIELD_NAMES: Record<string, string> = { title: "title", price: "price", de
  * Paste box: the seller copies an Etsy listing page (Ctrl+A, Ctrl+C) and
  * pastes it here; the found fields fill in immediately, with an undo.
  */
-function QuickFill({ listing, onChange }: { listing: CompareListing; onChange: (patch: Partial<CompareListing>) => void }) {
+export function QuickFill({ listing, onChange }: { listing: CompareListing; onChange: (patch: Partial<CompareListing>) => void }) {
   const [summary, setSummary] = useState<{
     text: string;
     missing: string[];

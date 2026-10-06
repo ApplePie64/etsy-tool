@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { AdvisorState } from "./lib/advisor/context";
 import type { Plan } from "./lib/compare/plan";
 import type { Feedback } from "./lib/compare/report";
+import type { TrackedChange } from "./lib/compare/tracking";
 import type { Category, CompareListing } from "./lib/compare/types";
 import type { ListingInput } from "./lib/seo/analyzer";
 import { analyzeListing } from "./lib/seo/analyzer";
@@ -37,6 +38,8 @@ export interface SavedComparison {
   plan: Plan | null;
   chat: ChatTurn[];
   feedback: Feedback;
+  /** Changes the seller made on Etsy, newest first, with before/after stats. */
+  changes?: TrackedChange[];
 }
 
 export interface AppData {
