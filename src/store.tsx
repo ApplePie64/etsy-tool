@@ -111,7 +111,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(load);
   const [tab, setTab] = useState<TabId>(() => {
     const h = location.hash.replace("#", "") as TabId;
-    return TABS.some((t) => t.id === h) ? h : "overview";
+    if (TABS.some((t) => t.id === h)) return h;
+    // First visit: start on the main workflow rather than an empty dashboard.
+    try {
+      return localStorage.getItem(STORAGE_KEY) === null ? "compare" : "overview";
+    } catch {
+      return "compare";
+    }
   });
 
   const saveTimer = useRef<number | undefined>(undefined);

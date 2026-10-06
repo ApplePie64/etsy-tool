@@ -143,7 +143,11 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
   const competitors = c.listings.filter((l) => l.role === "competitor");
   const mine = c.listings.find((l) => l.role === "mine")!;
   const hasSample = c.listings.some((l) => l.source === "sample");
-  const planStale = !!c.plan && c.plan.generatedAt < c.listingsUpdatedAt;
+  // The rules plan is free and instant, so it's always live; a Claude plan is kept until the seller resets it.
+  const rulesLive = useMemo(() => (analysis ? validatePlan(rulesPlan(analysis), analysis, { source: "rules", model: null }) : null), [analysis]);
+  const aiPlan = c.plan?.source === "ai" ? c.plan : null;
+  const shownPlan = aiPlan ?? rulesLive;
+  const planStale = !!aiPlan && aiPlan.generatedAt < c.listingsUpdatedAt;
 
   const addCompetitor = () => {
     const used = new Set(competitors.map((l) => l.id));
@@ -316,7 +320,7 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
             </div>
             <CoverageTable a={analysis} />
           </div>
-          <details className="card" open={!c.plan}>
+          <details className="card">
             <summary>
               <strong>Findings ({analysis.findings.length})</strong> <span className="muted small">objective checks, each with the listing text behind it</span>
             </summary>
@@ -325,9 +329,9 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
             </div>
           </details>
 
-          <PlanSection comparison={c} analysis={analysis} ai={ai} stale={planStale} onPlan={(plan) => patch({ plan })} />
-          <ChatSection comparison={c} analysis={analysis} ai={ai} onChat={(chat) => patch({ chat })} />
-          <ReportSection comparison={c} analysis={analysis} onFeedback={(feedback) => patch({ feedback })} />
+          <PlanSection plan={shownPlan} hasAiPlan={!!aiPlan} analysis={analysis} ai={ai} stale={planStale} onPlan={(plan) => patch({ plan })} />
+          <ChatSection comparison={c} plan={shownPlan} analysis={analysis} ai={ai} onChat={(chat) => patch({ chat })} />
+          <ReportSection comparison={c} plan={shownPlan} analysis={analysis} onFeedback={(feedback) => patch({ feedback })} />
           <p className="tiny muted">{ready.length} listings in this analysis · created {c.createdAt.slice(0, 10)}</p>
         </>
       )}
@@ -336,37 +340,32 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
 }
 
 function PlanSection({
-  comparison: c,
+  plan,
+  hasAiPlan,
   analysis,
   ai,
   stale,
   onPlan,
 }: {
-  comparison: SavedComparison;
+  plan: Plan | null;
+  hasAiPlan: boolean;
   analysis: ReturnType<typeof analyzeComparison>;
   ai: { ai: boolean; model: string | null } | null;
   stale: boolean;
-  onPlan: (p: Plan) => void;
+  onPlan: (p: Plan | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  const plan = c.plan;
 
-  const generate = async () => {
+  const askClaude = async () => {
     setBusy(true);
     setNotice(null);
-    const rules = () => validatePlan(rulesPlan(analysis), analysis, { source: "rules", model: null });
     try {
-      if (ai?.ai) {
-        const { plan } = await postJson<{ plan: Plan }>("/api/compare/plan", { listings: analysis.listings });
-        onPlan(plan);
-      } else {
-        onPlan(rules());
-      }
+      const { plan } = await postJson<{ plan: Plan }>("/api/compare/plan", { listings: analysis.listings });
+      onPlan(plan);
     } catch (e) {
-      onPlan(rules());
-      setNotice(`The AI plan isn't available (${e instanceof ApiError ? e.message : "network error"}). Showing the rules-based plan instead.`);
+      setNotice(`Claude couldn't write a plan (${e instanceof ApiError ? e.message : "network error"}). The rules-based plan below still applies.`);
     } finally {
       setBusy(false);
     }
@@ -378,15 +377,27 @@ function PlanSection({
         <div>
           <h2>4. Improvement plan</h2>
           <p>
-            {ai?.ai ? `Written by Claude (${ai.model}), then checked by the rules engine.` : "AI is off: the plan comes from the rules engine."} Suggested wording only uses facts from your own listing.
+            {hasAiPlan
+              ? "Written by Claude, then checked by the rules engine."
+              : "Updates automatically as you edit — free, no AI needed."}{" "}
+            Suggested wording only uses facts from your own listing.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={generate} disabled={busy}>
-          {busy ? "Working…" : plan ? "Regenerate plan" : "Generate plan"}
-        </button>
+        {ai?.ai && (
+          <div className="row">
+            {hasAiPlan && (
+              <button className="btn btn-sm btn-ghost" onClick={() => onPlan(null)} disabled={busy}>
+                Back to automatic plan
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={askClaude} disabled={busy}>
+              {busy ? "Working…" : hasAiPlan ? "Rewrite with Claude" : "Write with Claude"}
+            </button>
+          </div>
+        )}
       </div>
       {notice && <p className="callout small">{notice}</p>}
-      {stale && <p className="callout small">The listings changed after this plan was made. Regenerate it to match.</p>}
+      {stale && <p className="callout small">The listings changed after Claude wrote this plan. Rewrite it, or go back to the automatic plan.</p>}
       {plan && (
         <>
           <div className="row small">
@@ -465,11 +476,13 @@ const CHAT_SUGGESTIONS = ["What should I change first?", "How does my price comp
 
 function ChatSection({
   comparison: c,
+  plan,
   analysis,
   ai,
   onChat,
 }: {
   comparison: SavedComparison;
+  plan: Plan | null;
   analysis: ReturnType<typeof analyzeComparison>;
   ai: { ai: boolean; model: string | null } | null;
   onChat: (chat: ChatTurn[]) => void;
@@ -487,7 +500,7 @@ function ChatSection({
     const history: ChatTurn[] = [...c.chat, { role: "user", content: question }];
     onChat(history);
     if (!ai?.ai) {
-      onChat([...history, { role: "assistant", content: localCompareAnswer(question, analysis, c.plan) }]);
+      onChat([...history, { role: "assistant", content: localCompareAnswer(question, analysis, plan) }]);
       return;
     }
     setBusy(true);
@@ -498,7 +511,7 @@ function ChatSection({
     try {
       const { notice } = await streamText(
         "/api/compare/chat",
-        { listings: analysis.listings, plan: c.plan, messages: history },
+        { listings: analysis.listings, plan, messages: history },
         (t) => {
           text += t;
           setPending(text);
@@ -508,7 +521,7 @@ function ChatSection({
       onChat([...history, { role: "assistant", content: notice ? `${text}\n\n_${notice}_` : text || "_No answer received._" }]);
     } catch (e) {
       if (!ctrl.signal.aborted) {
-        onChat([...history, { role: "assistant", content: `_The AI is unavailable (${(e as Error).message}). Offline answer:_\n\n${localCompareAnswer(question, analysis, c.plan)}` }]);
+        onChat([...history, { role: "assistant", content: `_The AI is unavailable (${(e as Error).message}). Offline answer:_\n\n${localCompareAnswer(question, analysis, plan)}` }]);
       } else if (text) onChat([...history, { role: "assistant", content: `${text}\n\n_(stopped)_` }]);
     } finally {
       setBusy(false);
@@ -591,14 +604,16 @@ function ChatSection({
 
 function ReportSection({
   comparison: c,
+  plan,
   analysis,
   onFeedback,
 }: {
   comparison: SavedComparison;
+  plan: Plan | null;
   analysis: ReturnType<typeof analyzeComparison>;
   onFeedback: (f: Feedback) => void;
 }) {
-  const input = { name: c.name, category: c.category, createdAt: c.createdAt, analysis, plan: c.plan, feedback: c.feedback };
+  const input = { name: c.name, category: c.category, createdAt: c.createdAt, analysis, plan, feedback: c.feedback };
   const fb = c.feedback;
   const radio = <K extends "changedDecision" | "wouldReuse">(k: K, v: NonNullable<Feedback[K]>, label: string) => (
     <label className="check" key={`${k}-${v}`}>
@@ -618,7 +633,6 @@ function ReportSection({
             Download Markdown
           </button>
         </div>
-        {!c.plan && <p className="tiny muted">Generate the plan first to include it in the report.</p>}
       </div>
       <div className="card stack-sm">
         <h2>Was this useful?</h2>

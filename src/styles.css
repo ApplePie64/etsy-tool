@@ -1579,3 +1579,22 @@ ul.evidence li {
   background: color-mix(in srgb, var(--warning) 22%, transparent);
   color: var(--ink);
 }
+
+.quickfill {
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+}
+
+.quickfill textarea {
+  min-height: 44px;
+}
+
+.quickfill-result {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
