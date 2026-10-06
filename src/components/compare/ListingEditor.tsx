@@ -125,6 +125,12 @@ export function ListingEditor({
           <input type="date" value={listing.capturedAt} onChange={(e) => e.target.value && onChange({ capturedAt: e.target.value })} />
         </label>
       </div>
+      <label className="field">
+        <span>
+          Details you've seen <span className="field-hint">optional · one per line, e.g. "Material: stoneware" or "Size: 11 oz" — from photos or reviews</span>
+        </span>
+        <textarea rows={2} value={listing.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value.trim() ? e.target.value : null })} />
+      </label>
       <div className="row tiny muted">
         <span>
           Source: {listing.source === "sample" ? "sample data (fictional)" : listing.source === "csv" ? "your listings CSV" : "entered by you"}
@@ -140,18 +146,25 @@ export function ListingEditor({
   );
 }
 
-const FIELD_NAMES: Record<string, string> = { title: "title", price: "price", description: "description", reviews: "review count", link: "link" };
+const FIELD_NAMES: Record<string, string> = { title: "title", price: "price", description: "description", reviews: "review count", link: "link", photos: "photo count", video: "video" };
 
 /**
  * Paste box: the seller copies an Etsy listing page (Ctrl+A, Ctrl+C) and
  * pastes it here; the found fields fill in immediately, with an undo.
  */
 function QuickFill({ listing, onChange }: { listing: CompareListing; onChange: (patch: Partial<CompareListing>) => void }) {
-  const [summary, setSummary] = useState<{ text: string; missing: string[]; undo: Partial<CompareListing> } | null>(null);
+  const [summary, setSummary] = useState<{
+    text: string;
+    missing: string[];
+    undo: Partial<CompareListing>;
+    /** Asked once after a paste and kept visible while the seller answers. */
+    askPhotos?: boolean;
+    askVideo?: boolean;
+  } | null>(null);
   const [value, setValue] = useState("");
 
-  const apply = (text: string) => {
-    const p = parseListingPaste(text);
+  const apply = (text: string, html = "") => {
+    const p = parseListingPaste(text, html);
     if (!p.found.length) {
       setSummary({ text: "Couldn't find listing details in that text. Try copying the whole listing page, or type the details below.", missing: [], undo: {} });
       return;
@@ -165,19 +178,19 @@ function QuickFill({ listing, onChange }: { listing: CompareListing; onChange: (
     if (p.description) patch.description = p.description;
     if (p.reviewCount !== null && listing.role === "competitor") patch.reviewCount = p.reviewCount;
     if (p.url) patch.url = p.url;
+    if (p.photoCount !== null) patch.photoCount = p.photoCount;
+    if (p.hasVideo) patch.hasVideo = true;
     if (p.shopName && listing.role === "competitor" && /^Listing \d$/.test(listing.label)) patch.label = p.shopName;
     const undo = Object.fromEntries(Object.keys(patch).map((k) => [k, listing[k as keyof CompareListing]])) as Partial<CompareListing>;
     onChange(patch);
-    const missing = [
-      listing.photoCount === null ? "photo count" : null,
-      listing.hasVideo === null ? "video" : null,
-      listing.role === "mine" && listing.tags === null ? "tags" : null,
-    ].filter((x): x is string => !!x);
+    const missing = [listing.role === "mine" && listing.tags === null ? "your tags" : null].filter((x): x is string => !!x);
     const found = p.found.map((f) => FIELD_NAMES[f] ?? f);
     setSummary({
       text: `Filled in: ${found.join(", ")}${p.currencyAssumed ? " (price read as USD from \"$\" — change the currency if that's wrong)" : ""}. Check them below.`,
       missing,
       undo,
+      askPhotos: (patch.photoCount ?? listing.photoCount) === null,
+      askVideo: (patch.hasVideo ?? listing.hasVideo) === null,
     });
     setValue("");
   };
@@ -197,7 +210,7 @@ function QuickFill({ listing, onChange }: { listing: CompareListing; onChange: (
             const text = e.clipboardData.getData("text");
             if (text.trim()) {
               e.preventDefault();
-              apply(text);
+              apply(text, e.clipboardData.getData("text/html"));
             }
           }}
           onBlur={() => value.trim() && apply(value)}
@@ -206,7 +219,36 @@ function QuickFill({ listing, onChange }: { listing: CompareListing; onChange: (
       {summary && (
         <div className="small quickfill-result" role="status">
           <span>{summary.text}</span>
-          {summary.missing.length > 0 && <span className="muted"> Add by hand: {summary.missing.join(", ")} (not in copied text).</span>}
+          {summary.missing.length > 0 && <span className="muted"> Add by hand: {summary.missing.join(", ")}.</span>}
+          {(summary.askPhotos || summary.askVideo) && (
+            <span className="row quick-ask">
+              {summary.askPhotos && (
+                <label className="row" style={{ gap: 4 }}>
+                  Photos on the listing:
+                  <input
+                    type="number"
+                    min={0}
+                    max={ETSY_LIMITS.maxPhotos}
+                    style={{ width: 64 }}
+                    aria-label="Number of photos"
+                    value={listing.photoCount ?? ""}
+                    onChange={(e) => onChange({ photoCount: numOrNull(e.target.value) })}
+                  />
+                </label>
+              )}
+              {summary.askVideo && (
+                <span className="row" style={{ gap: 4 }} role="group" aria-label="Has a video">
+                  Video?
+                  <button type="button" className="btn btn-sm" aria-pressed={listing.hasVideo === true} onClick={() => onChange({ hasVideo: true })}>
+                    Yes
+                  </button>
+                  <button type="button" className="btn btn-sm" aria-pressed={listing.hasVideo === false} onClick={() => onChange({ hasVideo: false })}>
+                    No
+                  </button>
+                </span>
+              )}
+            </span>
+          )}
           {Object.keys(summary.undo).length > 0 && (
             <button
               type="button"

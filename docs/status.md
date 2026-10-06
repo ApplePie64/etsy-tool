@@ -10,7 +10,7 @@ The core workflow is built: **provide a listing and comparison examples → insp
 
 | Requirement | Status | Notes |
 |---|---|---|
-| One seller category, English listings | ✅ | Digital downloads. Fact extraction is English-only. |
+| One seller category, English listings | ✅ | Two: digital downloads and physical products (handmade, personalised, print-on-demand), detected from the listings and switchable. Sellers can add details they've seen in photos or reviews ("Material: stoneware"); these are quoted as evidence like listing text. Fact extraction is English-only. |
 | Comparison set of 3–5 items | ✅ | Up to 5 comparison listings; warns below 3. |
 | Permitted API input when ready; otherwise seller-supplied details and labelled sample data | 🟡 | Paste-to-fill (copy an Etsy listing page, paste it), manual entry and your own listings CSV work. Sample data is fictional and labelled everywhere it appears, including the report. Etsy API import isn't built: it needs approved API access, and Etsy's terms rule out scraping. |
 | Price/currency, product attributes, title/tag coverage, customer-facing differences | ✅ | Side-by-side table, phrase coverage table, and price position within one currency. |

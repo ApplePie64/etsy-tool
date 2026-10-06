@@ -9,7 +9,8 @@ import { localCompareAnswer } from "../lib/compare/localChat";
 import { rulesPlan, type Plan } from "../lib/compare/plan";
 import { reportHtml, reportMarkdown, type Feedback } from "../lib/compare/report";
 import { SAMPLE_NOTICE, sampleComparison } from "../lib/compare/sample";
-import { CATEGORY_LABELS, MAX_COMPETITORS, RECOMMENDED_COMPETITORS, type CompareListing } from "../lib/compare/types";
+import { ATTRIBUTE_LABELS, detectCategory, type AttributeKey } from "../lib/compare/attributes";
+import { CATEGORY_LABELS, MAX_COMPETITORS, RECOMMENDED_COMPETITORS, type Category, type CompareListing } from "../lib/compare/types";
 import { aiAvailable, ApiError, postJson, streamText } from "../lib/sse";
 import { useStore, type ChatTurn, type SavedComparison } from "../store";
 
@@ -30,6 +31,7 @@ function blankListing(id: string, role: CompareListing["role"]): CompareListing 
     photoCount: null,
     hasVideo: null,
     reviewCount: null,
+    notes: null,
     source: "manual",
     capturedAt: today(),
   };
@@ -119,7 +121,7 @@ export function Compare() {
             </>
           }
         >
-          Category: {CATEGORY_LABELS.digital}. Copy each listing's details from Etsy by hand — titles, descriptions, prices and photo counts are on the listing page; competitors' tags usually aren't, so leave them blank.
+          Works for physical products and digital downloads. Open a listing on Etsy, press Ctrl+A then Ctrl+C, and paste it into a Quick fill box — the details fill in for you.
         </Empty>
       )}
     </div>
@@ -136,8 +138,15 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
   const ready = c.listings.filter((l) => l.title.trim());
   const analysis = useMemo(() => {
     const ls = c.listings.filter((l) => l.title.trim());
-    return ls.some((l) => l.role === "mine") && ls.some((l) => l.role === "competitor") ? analyzeComparison(ls) : null;
-  }, [c.listings]);
+    return ls.some((l) => l.role === "mine") && ls.some((l) => l.role === "competitor") ? analyzeComparison(ls, c.categoryChoice) : null;
+  }, [c.listings, c.categoryChoice]);
+  const detected = useMemo(() => detectCategory(c.listings.filter((l) => l.title.trim())), [c.listings]);
+  const addDetail = (listingId: string, key: AttributeKey, value: string) => {
+    const l = c.listings.find((x) => x.id === listingId);
+    if (!l) return;
+    const line = `${ATTRIBUTE_LABELS[key]}: ${value}`;
+    editListing(listingId, { notes: l.notes ? `${l.notes.trimEnd()}\n${line}` : line });
+  };
   // Open the input sections only if the comparison starts empty; never collapse them while typing.
   const [inputsOpen] = useState(() => !analysis);
   const competitors = c.listings.filter((l) => l.role === "competitor");
@@ -184,7 +193,14 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
             <span className="visually-hidden">Analysis name</span>
             <input type="text" value={c.name} onChange={(e) => patch({ name: e.target.value })} style={{ fontWeight: 600, fontSize: "1rem" }} />
           </label>
-          <span className="badge badge-accent">{CATEGORY_LABELS[c.category]}</span>
+          <label className="row small" style={{ gap: 6 }}>
+            <span className="muted">Product type</span>
+            <select value={c.categoryChoice ?? "auto"} onChange={(e) => patch({ categoryChoice: e.target.value === "auto" ? undefined : (e.target.value as Category) })}>
+              <option value="auto">Auto ({CATEGORY_LABELS[detected].toLowerCase()})</option>
+              <option value="physical">{CATEGORY_LABELS.physical}</option>
+              <option value="digital">{CATEGORY_LABELS.digital}</option>
+            </select>
+          </label>
           <button
             className="btn btn-sm btn-ghost"
             onClick={() => {
@@ -304,7 +320,7 @@ function Workspace({ comparison: c, ai }: { comparison: SavedComparison; ai: { a
               <h2>3. Side by side</h2>
               <p>Hover a detail to see the text it was found in</p>
             </div>
-            <ComparisonTable a={analysis} />
+            <ComparisonTable a={analysis} onAddDetail={addDetail} />
           </div>
           <div className="card">
             <div className="card-head">
@@ -362,7 +378,7 @@ function PlanSection({
     setBusy(true);
     setNotice(null);
     try {
-      const { plan } = await postJson<{ plan: Plan }>("/api/compare/plan", { listings: analysis.listings });
+      const { plan } = await postJson<{ plan: Plan }>("/api/compare/plan", { listings: analysis.listings, category: analysis.category });
       onPlan(plan);
     } catch (e) {
       setNotice(`Claude couldn't write a plan (${e instanceof ApiError ? e.message : "network error"}). The rules-based plan below still applies.`);
@@ -511,7 +527,7 @@ function ChatSection({
     try {
       const { notice } = await streamText(
         "/api/compare/chat",
-        { listings: analysis.listings, plan, messages: history },
+        { listings: analysis.listings, category: analysis.category, plan, messages: history },
         (t) => {
           text += t;
           setPending(text);
@@ -613,7 +629,7 @@ function ReportSection({
   analysis: ReturnType<typeof analyzeComparison>;
   onFeedback: (f: Feedback) => void;
 }) {
-  const input = { name: c.name, category: c.category, createdAt: c.createdAt, analysis, plan, feedback: c.feedback };
+  const input = { name: c.name, createdAt: c.createdAt, analysis, plan, feedback: c.feedback };
   const fb = c.feedback;
   const radio = <K extends "changedDecision" | "wouldReuse">(k: K, v: NonNullable<Feedback[K]>, label: string) => (
     <label className="check" key={`${k}-${v}`}>

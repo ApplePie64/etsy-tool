@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { analyzeComparison } from "../src/lib/compare/analyze";
 import { validatePlan } from "../src/lib/compare/guard";
 import type { RawPlan } from "../src/lib/compare/plan";
-import { sanitizeListings } from "../src/lib/compare/validate";
+import { sanitizeCategory, sanitizeListings } from "../src/lib/compare/validate";
 import { ADVISOR_MODEL, aiConfigured, sanitizeChat, streamAdvisorReply } from "./advisor";
 import { generateAiPlan, PlanError, streamCompareChat } from "./compare";
 
@@ -103,7 +103,8 @@ app.post("/api/advisor", async (req: Request, res: Response) => {
 
 app.post("/api/compare/plan", async (req: Request, res: Response) => {
   if (!aiReady(req, res)) return;
-  const parsed = sanitizeListings((req.body as { listings?: unknown } | undefined)?.listings);
+  const body = (req.body ?? {}) as { listings?: unknown; category?: unknown };
+  const parsed = sanitizeListings(body.listings);
   if ("error" in parsed) {
     res.status(400).json({ error: "bad_request", message: parsed.error });
     return;
@@ -111,7 +112,7 @@ app.post("/api/compare/plan", async (req: Request, res: Response) => {
   const abort = new AbortController();
   res.on("close", () => abort.abort());
   try {
-    res.json({ plan: await generateAiPlan(parsed.listings, abort.signal) });
+    res.json({ plan: await generateAiPlan(parsed.listings, sanitizeCategory(body.category), abort.signal) });
   } catch (err) {
     if (abort.signal.aborted) return;
     console.error("[compare/plan]", err);
@@ -121,7 +122,8 @@ app.post("/api/compare/plan", async (req: Request, res: Response) => {
 
 app.post("/api/compare/chat", async (req: Request, res: Response) => {
   if (!aiReady(req, res)) return;
-  const body = (req.body ?? {}) as { listings?: unknown; plan?: unknown };
+  const body = (req.body ?? {}) as { listings?: unknown; plan?: unknown; category?: unknown };
+  const category = sanitizeCategory(body.category);
   const parsed = sanitizeListings(body.listings);
   const chat = sanitizeChat(req.body);
   if ("error" in parsed || !chat) {
@@ -130,9 +132,9 @@ app.post("/api/compare/chat", async (req: Request, res: Response) => {
   }
   // The plan is only context for follow-up questions; re-validate it against this comparison.
   const plan = isPlanLike(body.plan)
-    ? validatePlan(body.plan, analyzeComparison(parsed.listings), { source: body.plan.source === "ai" ? "ai" : "rules", model: null })
+    ? validatePlan(body.plan, analyzeComparison(parsed.listings, category), { source: body.plan.source === "ai" ? "ai" : "rules", model: null })
     : null;
-  await sse(res, "compare/chat", (onText, signal) => streamCompareChat(parsed.listings, plan, chat.messages, { onText, signal }));
+  await sse(res, "compare/chat", (onText, signal) => streamCompareChat(parsed.listings, plan, chat.messages, { onText, signal, category }));
 });
 
 function isPlanLike(v: unknown): v is RawPlan & { source?: string } {

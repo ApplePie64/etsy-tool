@@ -34,6 +34,7 @@ const listing = (over: Partial<CompareListing>): CompareListing => ({
   photoCount: null,
   hasVideo: null,
   reviewCount: null,
+  notes: null,
   source: "manual",
   capturedAt: "2026-10-01",
   ...over,
@@ -107,7 +108,7 @@ describe("missing data stays unknown", () => {
     const attrs = incomplete.attributes.mine!;
     expect(attrs.license.status).toBe("unknown");
     expect(attrs.formats.status).toBe("stated"); // "PDF" is in the title
-    expect(extractAttributes(listing({ description: "Thanks!" })).license.status).toBe("not_stated");
+    expect(extractAttributes(listing({ description: "Thanks!" }), "digital").license.status).toBe("not_stated");
   });
 
   it("doesn't claim a fact is missing when it can't know", () => {
@@ -306,7 +307,7 @@ describe("input validation", () => {
 });
 
 describe("report", () => {
-  const input = { name: "Budget planner check", category: "digital" as const, createdAt: "2026-10-05T10:00:00Z", analysis: a, plan: validatePlan(rulesPlan(a), a, { source: "rules", model: null }), feedback: { changedDecision: "yes" as const, wouldReuse: "yes" as const, note: "" } };
+  const input = { name: "Budget planner check", createdAt: "2026-10-05T10:00:00Z", analysis: a, plan: validatePlan(rulesPlan(a), a, { source: "rules", model: null }), feedback: { changedDecision: "yes" as const, wouldReuse: "yes" as const, note: "" } };
 
   it("includes the disclaimer, sample notice, exclusions and evidence", () => {
     const md = reportMarkdown(input);
@@ -322,5 +323,68 @@ describe("report", () => {
     const html = reportHtml({ ...input, analysis: evil, plan: null });
     expect(html).not.toMatch(/<script>alert/);
     expect(html).toMatch(/&lt;script&gt;/);
+  });
+});
+
+describe("physical products", () => {
+  const phys = (over: Partial<CompareListing> & Pick<CompareListing, "id" | "role" | "title">) => listing({ currency: "INR", ...over });
+  const L = [
+    phys({ id: "mine", role: "mine", title: "Personalized Ceramic Celebration Plate | Custom Name Plate | Handmade Wedding Gift", price: 12596, description: "A handmade ceramic plate personalised with your names and date. Perfect wedding or anniversary gift." }),
+    phys({ id: "c1", role: "competitor", title: "Personalised Heat Change Mug Photo Collage (11oz) Magic Mug", price: 1470, description: "Upload up to 6 photos. 11oz ceramic magic mug. Dishwasher safe, not microwave safe. Dispatched within 1-2 working days. Free UK delivery. Comes in a gift box." }),
+    phys({ id: "c2", role: "competitor", title: "Actual Handwritten Necklace, Memorial Personalized Handwriting Necklace", price: 1511, description: "Your actual handwriting engraved on a sterling silver bar. Chain length 18 inch. Tarnish resistant. Ships in 3-5 business days in a jewelry box." }),
+    phys({ id: "c3", role: "competitor", title: "Custom Tumbler with Photo, Gift for Mom", price: 1532, description: "20 oz stainless steel tumbler. Add your photo and name. Hand wash only. Made to order." }),
+  ];
+  const p = analyzeComparison(L);
+
+  it("detects physical products and checks the details that matter for them", () => {
+    expect(p.category).toBe("physical");
+    expect(p.attributeKeys).toContain("materials");
+    expect(p.attributeKeys).not.toContain("formats");
+    expect(p.attributes.c1!.materials.values).toContain("ceramic");
+    expect(p.attributes.c2!.materials.values).toContain("sterling silver");
+    expect(p.attributes.c1!.sizes.values).toContain("11 oz");
+    expect(p.attributes.c1!.production.values[0]).toMatch(/dispatched within 1-2 working days/);
+    expect(p.attributes.c1!.shipping.values).toContain("free uk delivery");
+    expect(p.attributes.c3!.packaging.status).toBe("not_stated");
+    expect(analyzeComparison(sampleComparison()).category).toBe("digital");
+  });
+
+  it("keeps negations: 'not microwave safe' is not 'microwave safe'", () => {
+    expect(p.attributes.c1!.care.values).toEqual(expect.arrayContaining(["dishwasher safe", "not microwave safe"]));
+    expect(p.attributes.c1!.care.values).not.toContain("microwave safe");
+  });
+
+  it("flags the details the seller's listing leaves out", () => {
+    const ids = p.findings.map((f) => f.id);
+    expect(ids).toEqual(expect.arrayContaining(["missing-sizes", "missing-production", "missing-care", "missing-packaging"]));
+    expect(ids).not.toContain("missing-materials"); // "ceramic" is stated
+    expect(p.findings.find((f) => f.id === "missing-production")!.severity).toBe("high");
+  });
+
+  it("uses details the seller adds, with their note as evidence", () => {
+    const withNotes = analyzeComparison(L.map((l) => (l.id === "c3" ? { ...l, notes: "Packaging: comes in a branded gift box" } : l)));
+    const r = withNotes.attributes.c3!.packaging;
+    expect(r.status).toBe("stated");
+    expect(r.values).toContain("comes in a branded gift box");
+    expect(verifyEvidence({ ref: "c3.notes", quote: r.evidence[0]!.quote }, withNotes).ok).toBe(true);
+    const sized = analyzeComparison(L.map((l) => (l.id === "mine" ? { ...l, notes: "Size: 27 cm diameter" } : l)));
+    expect(sized.attributes.mine!.sizes.values).toEqual(["27 cm diameter"]);
+  });
+
+  it("drops a value another value already covers, by whole words only", () => {
+    expect(p.attributes.c2!.personalization.values).toContain("actual handwriting");
+    expect(p.attributes.c2!.personalization.values).not.toContain("handwriting");
+    const two = analyzeComparison(L.map((l) => (l.id === "c3" ? { ...l, description: "Comes in 1 oz and 11 oz sizes. Stainless steel." } : l)));
+    expect(two.attributes.c3!.sizes.values).toEqual(expect.arrayContaining(["1 oz", "11 oz"]));
+  });
+
+  it("rejects invented materials and care claims in suggested wording", () => {
+    const plan2 = validatePlan(
+      plan([suggestion({ evidence: [{ ref: "c1.description", quote: "Dishwasher safe" }], proposedText: "Made from food-safe stoneware, dishwasher safe. Ships in 2 days." })]),
+      p,
+      { source: "ai", model: null },
+    );
+    expect(plan2.suggestions[0]!.proposedText).toBeNull();
+    expect(plan2.suggestions[0]!.notes.join(" ")).toMatch(/stoneware|dishwasher safe/);
   });
 });

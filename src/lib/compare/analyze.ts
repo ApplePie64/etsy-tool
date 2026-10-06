@@ -1,7 +1,7 @@
 import { containsAllWords, contentWords, phraseKey, titleSegments } from "../seo/keywords";
 import { ETSY_LIMITS } from "../seo/rules";
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, ATTRIBUTE_WHY, extractAttributes, type AttributeKey, type AttributeResult } from "./attributes";
-import { EVIDENCE_FIELDS, RECOMMENDED_COMPETITORS, type CompareListing, type Evidence, type EvidenceField } from "./types";
+import { ATTRIBUTE_LABELS, ATTRIBUTE_WHY, CATEGORY_ATTRIBUTES, detectCategory, extractAttributes, HIGH_IMPACT, type AttributeKey, type AttributeResult } from "./attributes";
+import { EVIDENCE_FIELDS, RECOMMENDED_COMPETITORS, type Category, type CompareListing, type Evidence, type EvidenceField } from "./types";
 
 /* ------------------------------------------------------------------ */
 /* Field access — one definition shared by the UI, report and guard.   */
@@ -16,6 +16,8 @@ export function fieldText(l: CompareListing, field: EvidenceField): string | nul
       return l.tags ? l.tags.join(", ") : null;
     case "description":
       return l.description;
+    case "notes":
+      return l.notes;
     case "price":
       return l.price === null ? null : formatAmount(l.price);
     case "currency":
@@ -33,6 +35,7 @@ export const FIELD_LABELS: Record<EvidenceField, string> = {
   title: "title",
   tags: "tags",
   description: "description",
+  notes: "your notes",
   price: "price",
   currency: "currency",
   photoCount: "photo count",
@@ -47,9 +50,14 @@ export function formatAmount(n: number): string {
 /** Counts like a median photo count: "9.5", not "9.50". */
 export const formatCount = (n: number) => String(Math.round(n * 10) / 10);
 
+/** For display: "12,596" and "5.99". Evidence quotes keep formatAmount so they match the stored value. */
+export function displayAmount(n: number): string {
+  return n.toLocaleString("en-US", Number.isInteger(n) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function formatPrice(price: number | null, currency: string | null): string {
   if (price === null) return "Unknown";
-  return `${formatAmount(price)} ${currency ?? "(currency unknown)"}`;
+  return `${displayAmount(price)} ${currency ?? "(currency unknown)"}`;
 }
 
 export function parseRef(ref: string): { listingId: string; field: EvidenceField } | null {
@@ -252,6 +260,9 @@ export interface MissingItem {
 }
 
 export interface ComparisonAnalysis {
+  category: Category;
+  /** Customer-facing facts checked for this category, in display order. */
+  attributeKeys: AttributeKey[];
   listings: CompareListing[];
   mine: CompareListing | null;
   competitors: CompareListing[];
@@ -265,17 +276,18 @@ export interface ComparisonAnalysis {
 }
 
 const SEVERITY_ORDER = { high: 0, medium: 1, low: 2, info: 3 } as const;
-const HIGH_IMPACT: AttributeKey[] = ["formats", "delivery", "license", "sizes"];
 
 export function labelOf(listings: CompareListing[], id: string): string {
   return listings.find((l) => l.id === id)?.label ?? id;
 }
 
-export function analyzeComparison(listings: CompareListing[]): ComparisonAnalysis {
+/** `category` defaults to what the listings look like (digital downloads or physical products). */
+export function analyzeComparison(listings: CompareListing[], category: Category = detectCategory(listings)): ComparisonAnalysis {
+  const attributeKeys = CATEGORY_ATTRIBUTES[category];
   const mine = listings.find((l) => l.role === "mine") ?? null;
   const competitors = listings.filter((l) => l.role === "competitor");
   const attributes: ComparisonAnalysis["attributes"] = {};
-  for (const l of listings) attributes[l.id] = extractAttributes(l);
+  for (const l of listings) attributes[l.id] = extractAttributes(l, category);
   const coverage = analyzeCoverage(listings);
   const price = analyzePrices(listings);
   const knownPhotos = competitors.map((c) => c.photoCount).filter((n): n is number => n !== null);
@@ -287,7 +299,7 @@ export function analyzeComparison(listings: CompareListing[]): ComparisonAnalysi
   for (const l of listings) {
     for (const f of EVIDENCE_FIELDS) {
       // Review counts are optional context, never something the seller is asked for.
-      if (f === "title" || f === "reviewCount") continue;
+      if (f === "title" || f === "reviewCount" || f === "notes") continue;
       if (fieldText(l, f) === null) missing.push({ listingId: l.id, field: f, label: `${l.label}: ${FIELD_LABELS[f]} unknown` });
     }
   }
@@ -309,13 +321,13 @@ export function analyzeComparison(listings: CompareListing[]): ComparisonAnalysi
         severity: "high",
         area: "data",
         title: "Add your description to check customer-facing details",
-        detail: "Without your description we can't tell which formats, sizes, licence terms or delivery details you already state.",
+        detail: `Without your description we can't tell which ${attributeKeys.slice(0, 4).map((k) => ATTRIBUTE_LABELS[k].toLowerCase()).join(", ")} details you already state.`,
         evidence: [],
         guidance: [],
         ask: "Paste your listing description.",
       });
     }
-    for (const key of ATTRIBUTE_KEYS) {
+    for (const key of attributeKeys) {
       const mineAttr = attributes[mine.id]![key];
       if (mineAttr.status !== "not_stated") continue;
       const stating = competitors.filter((c) => attributes[c.id]![key].status === "stated");
@@ -323,7 +335,7 @@ export function analyzeComparison(listings: CompareListing[]): ComparisonAnalysi
       const values = [...new Set(stating.flatMap((c) => attributes[c.id]![key].values))].slice(0, 6);
       findings.push({
         id: `missing-${key}`,
-        severity: stating.length >= Math.ceil(competitors.length / 2) ? (HIGH_IMPACT.includes(key) ? "high" : "medium") : "low",
+        severity: stating.length >= Math.ceil(competitors.length / 2) ? (HIGH_IMPACT[category].includes(key) ? "high" : "medium") : "low",
         area: "information",
         title: `Your listing doesn't state its ${ATTRIBUTE_LABELS[key].toLowerCase()}`,
         detail: `${stating.length} of ${competitors.length} comparison listings do (${values.join(", ")}). This matters because ${ATTRIBUTE_WHY[key]}.`,
@@ -409,7 +421,10 @@ export function analyzeComparison(listings: CompareListing[]): ComparisonAnalysi
         severity: mine.photoCount < photos.competitorMedian / 2 ? "high" : "medium",
         area: "photos",
         title: `Fewer photos than most comparison listings (${mine.photoCount} vs median ${formatCount(photos.competitorMedian)})`,
-        detail: "For digital downloads, photos are where buyers see what's inside: page previews, a \"what you get\" graphic, device or print mockups.",
+        detail:
+          category === "digital"
+            ? "For digital downloads, photos are where buyers see what's inside: page previews, a \"what you get\" graphic, device or print mockups."
+            : "Photos are how buyers judge quality: show scale (in hand or in use), close-ups of the finish, every option, and the packaging.",
         evidence: [
           { ref: `${mine.id}.photoCount`, quote: String(mine.photoCount) },
           ...competitors.filter((c) => c.photoCount !== null).slice(0, 3).map((c) => ({ ref: `${c.id}.photoCount`, quote: String(c.photoCount) })),
@@ -424,7 +439,7 @@ export function analyzeComparison(listings: CompareListing[]): ComparisonAnalysi
         severity: "low",
         area: "photos",
         title: "Most comparison listings with known video status have one; yours doesn't",
-        detail: `${withVideo.length} of ${competitors.length} have a listing video. A short flip-through can show what the download contains.`,
+        detail: `${withVideo.length} of ${competitors.length} have a listing video. ${category === "digital" ? "A short flip-through can show what the download contains." : "A few seconds of the item in use shows size and finish better than photos."}`,
         evidence: [{ ref: `${mine.id}.hasVideo`, quote: "no" }, ...withVideo.slice(0, 2).map((c) => ({ ref: `${c.id}.hasVideo`, quote: "yes" }))],
         guidance: ["search-ranking-signals"],
       });
@@ -444,7 +459,7 @@ export function analyzeComparison(listings: CompareListing[]): ComparisonAnalysi
         severity: "info",
         area: "price",
         title: `Your price is ${where} comparison listing priced in ${mine.currency}`,
-        detail: `${formatPrice(mine.price, mine.currency)} vs ${formatAmount(Math.min(...g))}–${formatAmount(Math.max(...g))} ${mine.currency} (median ${formatAmount(median(g)!)}) across ${g.length} listing${g.length === 1 ? "" : "s"}. This describes position only; compare what each listing includes before changing price.`,
+        detail: `${formatPrice(mine.price, mine.currency)} vs ${displayAmount(Math.min(...g))}–${displayAmount(Math.max(...g))} ${mine.currency} (median ${displayAmount(median(g)!)}) across ${g.length} listing${g.length === 1 ? "" : "s"}. This describes position only; compare what each listing includes before changing price.`,
         evidence: [
           { ref: `${mine.id}.price`, quote: formatAmount(mine.price) },
           ...price.comparable.slice(0, 4).map((x) => ({ ref: `${x.id}.price`, quote: formatAmount(x.price) })),
@@ -498,5 +513,5 @@ export function analyzeComparison(listings: CompareListing[]): ComparisonAnalysi
     f.evidence = f.evidence.filter((e, i, all) => all.findIndex((x) => x.ref === e.ref && x.quote === e.quote) === i);
   }
   findings.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-  return { listings, mine, competitors, attributes, coverage, price, photos, findings, missing, warnings };
+  return { category, attributeKeys, listings, mine, competitors, attributes, coverage, price, photos, findings, missing, warnings };
 }

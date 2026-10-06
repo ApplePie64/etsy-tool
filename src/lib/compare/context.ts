@@ -1,4 +1,5 @@
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from "./attributes";
+import { ATTRIBUTE_LABELS } from "./attributes";
+import { CATEGORY_LABELS } from "./types";
 import { formatAmount, type ComparisonAnalysis } from "./analyze";
 import { GUIDANCE } from "./guidance";
 import type { Plan } from "./plan";
@@ -11,7 +12,7 @@ import type { Plan } from "./plan";
 export function comparisonDataBlock(a: ComparisonAnalysis, plan?: Plan | null): string {
   const U = "UNKNOWN";
   const data = {
-    category: "Digital downloads",
+    category: CATEGORY_LABELS[a.category],
     listings: a.listings.map((l) => ({
       id: l.id,
       role: l.role === "mine" ? "seller's own listing" : "comparison listing chosen by the seller",
@@ -26,13 +27,14 @@ export function comparisonDataBlock(a: ComparisonAnalysis, plan?: Plan | null): 
       photoCount: l.photoCount ?? U,
       hasVideo: l.hasVideo === null ? U : l.hasVideo ? "yes" : "no",
       reviewCount: l.reviewCount ?? U,
+      sellerNotes: l.notes ?? "none",
     })),
     computed: {
       customerFacingFacts: Object.fromEntries(
         a.listings.map((l) => [
           l.id,
           Object.fromEntries(
-            ATTRIBUTE_KEYS.map((k) => {
+            a.attributeKeys.map((k) => {
               const r = a.attributes[l.id]![k];
               return [ATTRIBUTE_LABELS[k], r.status === "stated" ? r.values : r.status === "unknown" ? U : "not stated"];
             }),

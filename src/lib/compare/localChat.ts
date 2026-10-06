@@ -1,4 +1,4 @@
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, type AttributeKey } from "./attributes";
+import { ATTRIBUTE_LABELS, type AttributeKey } from "./attributes";
 import { formatCount, formatPrice, labelOf, type ComparisonAnalysis } from "./analyze";
 import type { Plan } from "./plan";
 
@@ -60,7 +60,7 @@ export function localCompareAnswer(question: string, a: ComparisonAnalysis, plan
     case "listing": {
       const id = mentionedListing(question, a)!;
       const c = a.listings.find((l) => l.id === id)!;
-      const diffs = ATTRIBUTE_KEYS.filter((k) => a.attributes[id]![k].status === "stated" && a.attributes[mine.id]![k].status === "not_stated").map(
+      const diffs = a.attributeKeys.filter((k) => a.attributes[id]![k].status === "stated" && a.attributes[mine.id]![k].status === "not_stated").map(
         (k) => `**${ATTRIBUTE_LABELS[k]}:** ${c.label} states ${attrLine(a, id, k)}; yours doesn't.`,
       );
       const priceLine =
@@ -100,7 +100,7 @@ export function localCompareAnswer(question: string, a: ComparisonAnalysis, plan
       ].filter(Boolean).join("\n\n");
     }
     case "info": {
-      const rows = ATTRIBUTE_KEYS.map((k) => {
+      const rows = a.attributeKeys.map((k) => {
         const others = a.competitors.filter((c) => a.attributes[c.id]![k].status === "stated").length;
         return `**${ATTRIBUTE_LABELS[k]}:** yours — ${attrLine(a, mine.id, k)}; ${others} of ${a.competitors.length} others state it.`;
       });

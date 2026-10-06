@@ -1,9 +1,9 @@
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS } from "./attributes";
+import { ATTRIBUTE_LABELS, type AttributeKey } from "./attributes";
 import { formatCount, formatPrice, labelOf, type ComparisonAnalysis } from "./analyze";
 import { GUIDANCE_BY_ID } from "./guidance";
 import type { Plan } from "./plan";
 import { SAMPLE_NOTICE } from "./sample";
-import { CATEGORY_LABELS, type Category } from "./types";
+import { CATEGORY_LABELS } from "./types";
 
 export interface Feedback {
   changedDecision: "yes" | "no" | "unsure" | null;
@@ -13,7 +13,6 @@ export interface Feedback {
 
 export interface ReportInput {
   name: string;
-  category: Category;
   createdAt: string;
   analysis: ComparisonAnalysis;
   plan: Plan | null;
@@ -25,16 +24,16 @@ const DISCLAIMER =
 
 const cell = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
 
-function attrCell(a: ComparisonAnalysis, id: string, key: (typeof ATTRIBUTE_KEYS)[number]): string {
+function attrCell(a: ComparisonAnalysis, id: string, key: AttributeKey): string {
   const r = a.attributes[id]![key];
   return r.status === "stated" ? r.values.join(", ") : r.status === "unknown" ? "Unknown" : "Not stated";
 }
 
-export function reportMarkdown({ name, category, createdAt, analysis: a, plan, feedback }: ReportInput): string {
+export function reportMarkdown({ name, createdAt, analysis: a, plan, feedback }: ReportInput): string {
   const L = a.listings;
   const lines: string[] = [];
   lines.push(`# ${name}`, "");
-  lines.push(`${CATEGORY_LABELS[category]} · created ${createdAt.slice(0, 10)} · report generated ${new Date().toISOString().slice(0, 10)}`, "");
+  lines.push(`${CATEGORY_LABELS[a.category]} · created ${createdAt.slice(0, 10)} · report generated ${new Date().toISOString().slice(0, 10)}`, "");
   if (L.some((l) => l.source === "sample")) lines.push(`> ${SAMPLE_NOTICE}`, "");
   lines.push(`> ${DISCLAIMER}`, "");
 
@@ -49,7 +48,7 @@ export function reportMarkdown({ name, category, createdAt, analysis: a, plan, f
 
   lines.push("## Customer-facing details", "");
   lines.push(`| Detail | ${L.map((l) => cell(l.label)).join(" | ")} |`, `|---|${L.map(() => "---").join("|")}|`);
-  for (const k of ATTRIBUTE_KEYS) lines.push(`| ${ATTRIBUTE_LABELS[k]} | ${L.map((l) => cell(attrCell(a, l.id, k))).join(" | ")} |`);
+  for (const k of a.attributeKeys) lines.push(`| ${ATTRIBUTE_LABELS[k]} | ${L.map((l) => cell(attrCell(a, l.id, k))).join(" | ")} |`);
   lines.push("");
 
   if (a.coverage.terms.length) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseListingPaste } from "./pasteParser";
+import { countListingMedia, parseListingPaste } from "./pasteParser";
 
 /*
  * Fixtures imitate what Ctrl+A / Ctrl+C on an Etsy listing page produces:
@@ -139,5 +139,38 @@ A speckled stoneware mug, thrown by hand and glazed in matte white. Holds 12 oz.
     expect(p.price).toBeNull();
     expect(p.description).toBeNull();
     expect(parseListingPaste("").found).toEqual([]);
+  });
+});
+
+describe("countListingMedia", () => {
+  const TITLE = "Budget Planner Printable | Monthly Budget Sheet | Finance Tracker | A4 & US Letter PDF";
+  const img = (id: string, alt: string, size = "794xN") =>
+    `<img src="https://i.etsystatic.com/123/r/il/ab12cd/${id}/il_${size}.${id}_x1y2.jpg" alt="${alt}">`;
+  const html = [
+    img("5001", TITLE),
+    img("5001", TITLE, "75x75"), // thumbnail of the same photo
+    img("5002", "Budget Planner Printable | Monthly Budget Sheet | Finance Tracker | A4 &amp; US Letter PDF"),
+    img("5003", TITLE.slice(0, 40)),
+    img("9001", "Wedding Seating Chart Template, Editable Canva"), // a "you may also like" listing
+    '<img src="/logo.png" alt="Etsy">',
+  ].join("\n");
+
+  it("counts each of the listing's own photos once", () => {
+    expect(countListingMedia(html, TITLE)).toEqual({ photoCount: 3, hasVideo: null });
+  });
+
+  it("detects a listing video only alongside the listing's photos", () => {
+    expect(countListingMedia(html + '<video src="https://v.etsystatic.com/video/upload/x.mp4"></video>', TITLE).hasVideo).toBe(true);
+    expect(countListingMedia('<video src="x.mp4"></video>', TITLE)).toEqual({ photoCount: null, hasVideo: null });
+  });
+
+  it("stays unknown when no image matches the title", () => {
+    expect(countListingMedia(img("1", "Something else entirely"), TITLE)).toEqual({ photoCount: null, hasVideo: null });
+  });
+
+  it("is used by the paste parser when HTML is available", () => {
+    const p = parseListingPaste(FULL_PAGE, html);
+    expect(p.photoCount).toBe(3);
+    expect(p.found).toContain("photos");
   });
 });

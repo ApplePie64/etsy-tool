@@ -25,7 +25,10 @@ export type SavedAudit = Pick<BulkAuditSummary, "listings" | "averageScore" | "g
 export interface SavedComparison {
   id: string;
   name: string;
+  /** Legacy; the product type is detected from the listings unless categoryChoice is set. */
   category: Category;
+  /** The seller's explicit product type; undefined means detect it automatically. */
+  categoryChoice?: Category;
   createdAt: string;
   updatedAt: string;
   /** When the listings last changed; a plan older than this is stale. */

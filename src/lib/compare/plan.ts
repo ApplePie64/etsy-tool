@@ -1,5 +1,5 @@
 import { ETSY_LIMITS } from "../seo/rules";
-import { ATTRIBUTE_KEYS, ATTRIBUTE_LABELS, factsIn } from "./attributes";
+import { ATTRIBUTE_LABELS, factsIn, type AttributeKey } from "./attributes";
 import type { ComparisonAnalysis } from "./analyze";
 import type { Evidence } from "./types";
 
@@ -98,7 +98,7 @@ export const RAW_PLAN_SCHEMA = {
 /** Lowercased text of the seller's own listing, the only source of facts for edits. */
 export function ownFactsText(a: ComparisonAnalysis): string {
   if (!a.mine) return "";
-  return [a.mine.title, ...(a.mine.tags ?? []), a.mine.description ?? ""].join("\n");
+  return [a.mine.title, ...(a.mine.tags ?? []), a.mine.description ?? "", a.mine.notes ?? ""].join("\n");
 }
 
 /** Phrases whose product facts (formats, sizes...) all appear in the seller's listing. */
@@ -122,7 +122,7 @@ export function rulesPlan(a: ComparisonAnalysis): RawPlan {
 
   for (const f of a.findings) {
     if (f.id.startsWith("missing-")) {
-      const key = f.id.slice("missing-".length) as (typeof ATTRIBUTE_KEYS)[number];
+      const key = f.id.slice("missing-".length) as AttributeKey;
       suggestions.push({
         priority: f.severity === "high" ? "high" : f.severity === "medium" ? "medium" : "low",
         area: "description",
@@ -186,7 +186,10 @@ export function rulesPlan(a: ComparisonAnalysis): RawPlan {
       suggestions.push({
         priority: f.severity === "high" ? "high" : "medium",
         area: "photos",
-        action: "Add photos that show what's inside: page previews, a \"what you get\" graphic, and a print or device mockup.",
+        action:
+          a.category === "digital"
+            ? "Add photos that show what's inside: page previews, a \"what you get\" graphic, and a print or device mockup."
+            : "Add photos that show scale, close-ups of the finish, each option, and the packaging.",
         why: `${f.title}. ${f.detail}`,
         evidence: f.evidence,
         guidance: f.guidance,
@@ -197,7 +200,7 @@ export function rulesPlan(a: ComparisonAnalysis): RawPlan {
       suggestions.push({
         priority: "low",
         area: "photos",
-        action: "Add a short flip-through video of the pages or files.",
+        action: a.category === "digital" ? "Add a short flip-through video of the pages or files." : "Add a short video of the item in use.",
         why: f.detail,
         evidence: f.evidence,
         guidance: f.guidance,
@@ -211,7 +214,9 @@ export function rulesPlan(a: ComparisonAnalysis): RawPlan {
         action:
           a.price.position === "below"
             ? "Before changing price, compare what each listing includes; if yours offers as much, your price may leave value on the table."
-            : "Make sure the listing shows what justifies the higher price (more pages, formats, editing options or licence).",
+            : a.category === "digital"
+              ? "Make sure the listing shows what justifies the higher price (more pages, formats, editing options or licence)."
+              : "Make sure the listing shows what justifies the higher price (materials, size, craftsmanship, personalisation, packaging).",
         why: f.detail,
         evidence: f.evidence,
         guidance: f.guidance,
@@ -224,7 +229,8 @@ export function rulesPlan(a: ComparisonAnalysis): RawPlan {
   }
 
   for (const m of a.missing) {
-    if (m.listingId === mine.id) missingInfo.add(`Your ${m.label.split(": ")[1]?.replace(" unknown", "") ?? m.field}`);
+    // Missing tags already have their own ask ("Paste your 13 tags").
+    if (m.listingId === mine.id && m.field !== "tags") missingInfo.add(`Your ${m.label.split(": ")[1]?.replace(" unknown", "") ?? m.field}`);
   }
   if (a.competitors.some((c) => c.tags === null)) {
     missingInfo.add("Comparison listings' tags (usually not visible on Etsy) — coverage uses their titles only.");
