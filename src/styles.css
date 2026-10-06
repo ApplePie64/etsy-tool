@@ -1634,3 +1634,20 @@ ul.evidence li {
   min-width: 0;
   width: 120px;
 }
+
+.compare-table.results-table th[scope="row"],
+.compare-table.results-table td {
+  min-width: 0;
+}
+
+.results-table td.num {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .results-table th,
+  .results-table td {
+    padding: 6px;
+    font-size: 0.82rem;
+  }
+}

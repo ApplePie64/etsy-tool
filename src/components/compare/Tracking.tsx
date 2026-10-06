@@ -319,39 +319,43 @@ function Results({ results, before, after, trend }: { results: MetricResult[]; b
   return (
     <div className="stack-sm">
       <div className="table-wrap">
-        <table className="compare-table">
+        <table className="compare-table results-table">
           <thead>
             <tr>
               <th />
-              <th className="num">Before</th>
-              <th className="num">After</th>
+              <th className="num">Before → after</th>
               <th className="num">Change</th>
-              {trend && <th className="num">vs your shop</th>}
-              <th>Reading</th>
             </tr>
           </thead>
           <tbody>
             {results.map((r) => (
               <tr key={r.key}>
-                <th scope="row">{r.label}</th>
-                <td className="num">{r.before ?? "—"}</td>
-                <td className="num">{r.after ?? "—"}</td>
-                <td className="num">{pct(r.change)}</td>
-                {trend && <td className="num">{pct(r.vsShop)}</td>}
-                <td className={VERDICT_CLASS[r.verdict]}>{VERDICT_TEXT[r.verdict]}</td>
+                <th scope="row">
+                  {r.label}
+                  <div className={`tiny ${VERDICT_CLASS[r.verdict]}`}>{VERDICT_TEXT[r.verdict]}</div>
+                </th>
+                <td className="num">
+                  {r.before ?? "—"} → {r.after ?? "—"}
+                </td>
+                <td className="num">
+                  {pct(r.change)}
+                  {trend && r.vsShop !== null && <div className="tiny muted">{pct(r.vsShop)} vs shop</div>}
+                </td>
               </tr>
             ))}
             {cb !== null && ca !== null && (
               <tr>
-                <th scope="row">Conversion</th>
-                <td className="num">{cb.toFixed(1)}%</td>
-                <td className="num">{ca.toFixed(1)}%</td>
+                <th scope="row">
+                  Conversion
+                  <div className="tiny muted">Orders ÷ visits</div>
+                </th>
+                <td className="num">
+                  {cb.toFixed(1)}% → {ca.toFixed(1)}%
+                </td>
                 <td className="num">
                   {ca - cb >= 0 ? "+" : "−"}
                   {Math.abs(ca - cb).toFixed(1)} pts
                 </td>
-                {trend && <td />}
-                <td className="muted">Orders ÷ visits</td>
               </tr>
             )}
           </tbody>
